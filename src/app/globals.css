@@ -1,0 +1,11 @@
+/* src/app/globals.css */
+
+/* Estas 3 líneas son cruciales para que Tailwind funcione */
+@import "tailwindcss";
+
+
+body {
+  padding: 0;
+  margin: 0;
+  font-family: sans-serif;
+}
