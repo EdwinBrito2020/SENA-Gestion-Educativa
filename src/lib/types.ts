@@ -38,7 +38,8 @@ export interface AprendizDataFromAPI {
 export interface UserDataPayload {
   firma_aprendiz: string;                 // Firma del aprendiz en formato Base64
   firma_tutor: string;                    // Firma del tutor en formato Base64
-  tipo_y_documento_tutor: string;         // Tipo y número de documento del tutor concatenados
+  tipo_documento_tutor: string;           // "CC", "CE", "TI", etc.
+  numero_documento_tutor: string;         // "123456789"
   nombre_tutor: string;                   // Nombre completo del tutor legal
   cc_tutor: string;                       // Número de CC del tutor (si aplica)
   ce_tutor: string;                       // Número de CE del tutor (si aplica)

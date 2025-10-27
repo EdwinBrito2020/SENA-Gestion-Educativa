@@ -13,8 +13,9 @@ export default function FormularioGeneradorPDF() {
     nombre_tutor: '',
     cc_tutor: '',
     ce_tutor: '',
-    documento_tutor: '', // Se mantiene por si se usa en la API
-    tipo_y_documento_tutor: '',
+    documento_tutor: '',
+    numero_documento_tutor: '', // Se mantiene por si se usa en la API
+    tipo_documento_tutor: '',
     municipio_documento_tutor: '',
     correo_electronico_tutor: '',
     direccion_contacto_tutor: '',
@@ -205,7 +206,8 @@ export default function FormularioGeneradorPDF() {
       cc_tutor: '',
       ce_tutor: '',
       documento_tutor: '',
-      tipo_y_documento_tutor: '',
+      tipo_documento_tutor: '',        // ← ✅ NUEVO campo
+      numero_documento_tutor: '', 
       municipio_documento_tutor: '',
       correo_electronico_tutor: '',
       direccion_contacto_tutor: '',
@@ -293,29 +295,41 @@ export default function FormularioGeneradorPDF() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tipo y N° de Documento *</label>
-                  <input
-                    type="text"
-                    name="tipo_y_documento_tutor"
-                    value={formData.tipo_y_documento_tutor}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
-                    placeholder="Ej: CC 12345678"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">N° Cédula de Ciudadanía</label>
-                  <input
-                    type="text"
-                    name="cc_tutor"
-                    value={formData.cc_tutor}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
-                    placeholder="Solo si aplica"
-                  />
+                {/* AGREGAR ESTE BLOQUE NUEVO */}
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Documento de Identidad del Tutor *</label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Tipo de Documento</label>
+                      <select
+                        name="tipo_documento_tutor"
+                        value={formData.tipo_documento_tutor}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
+                      >
+                        <option value="">Seleccionar tipo...</option>
+                        <option value="CC">Cédula de Ciudadanía</option>
+                        <option value="CE">Cédula de Extranjería</option>
+                        <option value="TI">Tarjeta de Identidad</option>
+                        <option value="Pasaporte">Pasaporte</option>
+                        <option value="Otro">Otro</option>
+                      </select>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs text-gray-600 mb-1">Número de Documento</label>
+                      <input
+                        type="text"
+                        name="numero_documento_tutor"
+                        value={formData.numero_documento_tutor}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
+                        placeholder="Ej: 1234567890"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 <div>

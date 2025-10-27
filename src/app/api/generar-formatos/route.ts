@@ -76,7 +76,8 @@ export async function POST(request: NextRequest) {
     const requiredUserFields: (keyof UserDataPayload)[] = [
       'firma_aprendiz',
       'firma_tutor',
-      'tipo_y_documento_tutor',
+      'tipo_documento_tutor',      // ← NUEVO
+      'numero_documento_tutor',    // ← NUEVO
       'nombre_tutor',
     ];
 
@@ -172,11 +173,12 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     
     console.log('[API] Iniciando generación de documentos...');
-    
+
+    // Luego convertir a Uint8Array:
     const generatedDocs = await generateDocuments(
       fullData,
-      actaPdfBuffer.buffer,
-      tratamientoPdfBuffer.buffer
+      new Uint8Array(actaPdfBuffer),  // ← Conversión correcta
+      new Uint8Array(tratamientoPdfBuffer)  // ← Conversión correcta
     );
 
     console.log('[API] Documentos generados exitosamente:', {
@@ -233,7 +235,15 @@ export async function POST(request: NextRequest) {
      * - filename: nombre del archivo con formato [documento]_[tipo].pdf
      */
     
-    const response = new NextResponse(generatedDocs.actaCompromiso.buffer, {
+    // USAR Response NATIVO en lugar de NextResponse
+
+    console.log('[API] Enviando respuesta con PDF...', {
+      filename: generatedDocs.actaCompromiso.filename,
+      size: `${(generatedDocs.actaCompromiso.buffer.length / 1024).toFixed(2)} KB`,
+    });
+
+    // SOLUCIÓN MÁS SIMPLE: Convertir a Buffer temporalmente solo para la respuesta
+    return new NextResponse(Buffer.from(generatedDocs.actaCompromiso.buffer), {
       status: 200,
       headers: {
         'Content-Type': 'application/pdf',
@@ -242,12 +252,6 @@ export async function POST(request: NextRequest) {
       },
     });
 
-    console.log('[API] Respuesta enviada exitosamente:', {
-      filename: generatedDocs.actaCompromiso.filename,
-      size: `${(generatedDocs.actaCompromiso.buffer.length / 1024).toFixed(2)} KB`,
-    });
-
-    return response;
 
   } catch (error) {
     // ========================================================================
