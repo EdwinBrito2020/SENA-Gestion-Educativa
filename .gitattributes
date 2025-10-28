@@ -1,0 +1,22 @@
+# Forzar LF en el repositorio y evitar cambios automáticos de EOL en Windows
+* text=auto
+# Normalizar archivos de código a LF
+*.js     text eol=lf
+*.jsx    text eol=lf
+*.ts     text eol=lf
+*.tsx    text eol=lf
+*.json   text eol=lf
+*.css    text eol=lf
+*.scss   text eol=lf
+*.md     text eol=lf
+
+# Binarios y archivos que no deben normalizarse
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.gif    binary
+*.pdf    binary
+*.zip    binary
+
+# Mantener permisos de ejecutables
+*.sh      eol=lf
