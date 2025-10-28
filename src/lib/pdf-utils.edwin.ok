@@ -1,4 +1,4 @@
-// src/lib/pdf-utils.ts - VERSIÓN CORREGIDA
+// src/lib/pdf-utils.ts - TODO CON Uint8Array
 import { PDFDocument, PDFForm } from 'pdf-lib';
 import { FullDocumentData, GeneratedDocuments } from './types';
 
@@ -9,13 +9,8 @@ export async function generateDocuments(
 ): Promise<GeneratedDocuments> {
   
   console.log('[PDF Utils] Iniciando generación de documentos...');
-  console.log('[PDF Utils] Datos recibidos:', {
-    tutor: data.nombre_tutor,
-    tipo_doc_tutor: data.tipo_documento_tutor,
-    num_doc_tutor: data.numero_documento_tutor,
-    aprendiz: data.nombre_aprendiz,
-    tipo_doc_aprendiz: data.tipo_documento_aprendiz
-  });
+  console.log('[PDF Utils] Tamaño buffer acta:', actaPdfBuffer.length, 'bytes');
+  console.log('[PDF Utils] Tamaño buffer tratamiento:', tratamientoPdfBuffer.length, 'bytes');
 
   try {
     // PASO 1: Generar el Acta de Compromiso
@@ -54,7 +49,7 @@ async function fillActaCompromiso(
   console.log('[Acta Compromiso] Iniciando llenado del formulario...');
 
   try {
-    // PASO 1: Cargar el PDF base
+    // PASO 1: Cargar el PDF base CON DEBUGGING
     console.log('[Acta Compromiso] Intentando cargar PDF base...');
     let pdfDoc;
     try {
@@ -81,8 +76,7 @@ async function fillActaCompromiso(
     
     setTextField(form, 'numero_documento_aprendiz', data.numero_documento_aprendiz);
 
-    // PASO 3: Marcar el tipo de documento correspondiente (checkboxes) - CORREGIDO
-    console.log('[Acta Compromiso] Marcando tipo de documento aprendiz:', data.tipo_documento_aprendiz);
+    // PASO 3: Marcar el tipo de documento correspondiente (checkboxes)
     setCheckboxByDocumentType(form, data.tipo_documento_aprendiz);
 
     // PASO 4: Llenar datos del programa de formación
@@ -90,11 +84,8 @@ async function fillActaCompromiso(
     setTextField(form, 'numero_ficha', data.numero_ficha);
     setTextField(form, 'centro_formacion', data.centro_formacion);
 
-    // PASO 5: Llenar datos del tutor - CORREGIDO
-    // Construir el campo "tipo_y_documento_tutor" correctamente
-    const tipoYDocumentoTutor = `${data.tipo_documento_tutor} ${data.numero_documento_tutor}`;
-    console.log('[Acta Compromiso] Tipo y documento tutor:', tipoYDocumentoTutor);
-    setTextField(form, 'tipo_y_documento_tutor', tipoYDocumentoTutor);
+    // PASO 5: Llenar datos del tutor
+    setTextField(form, 'tipo_y_documento_tutor', data.tipo_documento_tutor);
 
     // PASO 6: Llenar la fecha
     setTextField(form, 'dia', data.dia);
@@ -110,19 +101,23 @@ async function fillActaCompromiso(
       await insertSignatureImage(pdfDoc, form, 'firma_tutor', data.firma_tutor);
     }
 
+
     console.log('[Acta Compromiso] Campos llenados, guardando PDF...');
+
 
     // PASO 8: Aplanar el formulario (hacer campos no editables)
     form.flatten();
 
-    // PASO 9: Guardar el PDF modificado
+    // PASO 9: Guardar el PDF modificado - esto retorna Uint8Array
     const pdfBytes = await pdfDoc.save();
+
 
     // PASO 10: Construir el nombre del archivo
     const filename = `acta_compromiso_${data.numero_documento_aprendiz}.pdf`;
 
     console.log(`[Acta Compromiso] Documento generado: ${filename}`);
     
+    // RETORNAR Uint8Array directamente
     return { buffer: pdfBytes, filename };
 
   } catch (error) {
@@ -139,7 +134,7 @@ async function fillTratamientoDatos(
   console.log('[Tratamiento Datos] Iniciando llenado del formulario...');
 
   try {
-    // PASO 1: Cargar el PDF base
+    // PASO 1: Cargar el PDF base CON DEBUGGING
     console.log('[Tratamiento Datos] Intentando cargar PDF base...');
     let pdfDoc;
     try {
@@ -167,24 +162,23 @@ async function fillTratamientoDatos(
     setTextField(form, 'programa_formacion', data.programa_formacion);
     setTextField(form, 'numero_ficha', data.numero_ficha);
 
-    // PASO 4: Llenar datos del tutor legal - CORREGIDO
+    // PASO 4: Llenar datos del tutor legal
     setTextField(form, 'nombre_tutor', data.nombre_tutor);
     
-    // Construir y usar el campo unificado de documento del tutor
-    const tipoYDocumentoTutor = `${data.tipo_documento_tutor} ${data.numero_documento_tutor}`;
-    console.log('[Tratamiento Datos] Tipo y documento tutor:', tipoYDocumentoTutor);
-    setTextField(form, 'tipo_y_documento_tutor', tipoYDocumentoTutor);
-    
-    // También llenar campos individuales si existen
-    if (data.tipo_documento_tutor === 'CC' && data.numero_documento_tutor) {
-      setTextField(form, 'cc_tutor', data.numero_documento_tutor);
+    if (data.cc_tutor) {
+      setTextField(form, 'cc_tutor', data.cc_tutor);
     }
     
-    if (data.tipo_documento_tutor === 'CE' && data.numero_documento_tutor) {
-      setTextField(form, 'ce_tutor', data.numero_documento_tutor);
+    if (data.ce_tutor) {
+      setTextField(form, 'ce_tutor', data.ce_tutor);
+    }
+    
+    if (data.documento_tutor) {
+      setTextField(form, 'documento_tutor', data.documento_tutor);
     }
     
     setTextField(form, 'municipio_documento_tutor', data.municipio_documento_tutor);
+    setTextField(form, 'tipo_y_documento_tutor', data.tipo_documento_tutor);
     setTextField(form, 'correo_electronico_tutor', data.correo_electronico_tutor);
     setTextField(form, 'direccion_contacto_tutor', data.direccion_contacto_tutor);
 
@@ -192,11 +186,7 @@ async function fillTratamientoDatos(
     setTextField(form, 'nombre_aprendiz', data.nombre_aprendiz);
     setTextField(form, 'numero_documento_aprendiz', data.numero_documento_aprendiz);
 
-    // PASO 6: Marcar tipo de documento del aprendiz en tratamiento de datos si existe
-    console.log('[Tratamiento Datos] Marcando tipo de documento aprendiz:', data.tipo_documento_aprendiz);
-    setCheckboxByDocumentType(form, data.tipo_documento_aprendiz);
-
-    // PASO 7: Insertar las firmas (imágenes Base64)
+    // PASO 6: Insertar las firmas (imágenes Base64)
     if (data.firma_aprendiz) {
       await insertSignatureImage(pdfDoc, form, 'firma_aprendiz', data.firma_aprendiz);
     }
@@ -205,17 +195,18 @@ async function fillTratamientoDatos(
       await insertSignatureImage(pdfDoc, form, 'firma_tutor', data.firma_tutor);
     }
 
-    // PASO 8: Aplanar el formulario
+    // PASO 7: Aplanar el formulario
     form.flatten();
 
-    // PASO 9: Guardar el PDF modificado
+    // PASO 8: Guardar el PDF modificado - retorna Uint8Array
     const pdfBytes = await pdfDoc.save();
 
-    // PASO 10: Construir el nombre del archivo
+    // PASO 9: Construir el nombre del archivo
     const filename = `tratamiento_datos_${data.numero_documento_aprendiz}.pdf`;
 
     console.log(`[Tratamiento Datos] Documento generado: ${filename}`);
     
+    // RETORNAR Uint8Array directamente
     return { buffer: pdfBytes, filename };
 
   } catch (error) {
@@ -225,7 +216,7 @@ async function fillTratamientoDatos(
 }
 
 // ============================================================================
-// FUNCIONES AUXILIARES MEJORADAS
+// 4. FUNCIONES AUXILIARES (se mantienen igual)
 // ============================================================================
 
 function setTextField(form: PDFForm, fieldName: string, value: string): void {
@@ -258,50 +249,21 @@ function setCheckbox(form: PDFForm, fieldName: string): void {
 
 function setCheckboxByDocumentType(
   form: PDFForm,
-  tipoDocumento: string
+  tipoDocumento: 'TI' | 'CC' | 'CE' | 'Otro'
 ): void {
-  console.log(`[PDF Utils] Buscando checkbox para tipo: ${tipoDocumento}`);
-  
-  // Mapeo más flexible de tipos de documento a nombres de campos
-  const checkboxMap: Record<string, string[]> = {
-    'TI': ['tipo_tarjeta_aprendiz', 'tarjeta_identidad', 'ti_aprendiz'],
-    'CC': ['tipo_cedula_aprendiz', 'cedula_ciudadania', 'cc_aprendiz'],
-    'CE': ['tipo_CE_aprendiz', 'cedula_extranjeria', 'ce_aprendiz'],
-    'Otro': ['tipo_otro_aprendiz', 'otro_documento', 'otro_aprendiz'],
+  const checkboxMap: Record<string, string> = {
+    'TI': 'tipo_tarjeta_aprendiz',
+    'CC': 'tipo_cedula_aprendiz',
+    'CE': 'tipo_CE_aprendiz',
+    'Otro': 'tipo_otro_aprendiz',
   };
 
-  const possibleNames = checkboxMap[tipoDocumento] || [];
-  
-  // Buscar el primer checkbox que exista en el formulario
-  for (const checkboxName of possibleNames) {
-    try {
-      const checkbox = form.getCheckBox(checkboxName);
-      if (checkbox) {
-        checkbox.check();
-        console.log(`[PDF Utils] ✅ Checkbox marcado: ${checkboxName} para tipo ${tipoDocumento}`);
-        return;
-      }
-    } catch (error) {
-      // Continuar con el siguiente nombre
-      continue;
-    }
+  const checkboxName = checkboxMap[tipoDocumento];
+  if (checkboxName) {
+    setCheckbox(form, checkboxName);
+  } else {
+    console.warn(`[PDF Utils] Tipo de documento no reconocido: ${tipoDocumento}`);
   }
-
-  // Si no se encontró ninguno, intentar con el nombre base
-  const baseName = `tipo_${tipoDocumento.toLowerCase()}_aprendiz`;
-  try {
-    const checkbox = form.getCheckBox(baseName);
-    if (checkbox) {
-      checkbox.check();
-      console.log(`[PDF Utils] ✅ Checkbox marcado: ${baseName} para tipo ${tipoDocumento}`);
-      return;
-    }
-  } catch (error) {
-    // No hacer nada, continuar
-  }
-
-  console.warn(`[PDF Utils] ❌ No se pudo encontrar checkbox para tipo: ${tipoDocumento}`);
-  console.warn(`[PDF Utils] Nombres intentados:`, possibleNames);
 }
 
 async function insertSignatureImage(

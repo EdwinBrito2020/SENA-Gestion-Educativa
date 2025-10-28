@@ -2,20 +2,17 @@
 
 'use client';
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 
 export default function FormularioGeneradorPDF() {
   // ============================================================================
-  // 1. ESTADOS DEL FORMULARIO
+  // 1. ESTADOS DEL FORMULARIO (SIMPLIFICADOS)
   // ============================================================================
   
   const [formData, setFormData] = useState({
     nombre_tutor: '',
-    cc_tutor: '',
-    ce_tutor: '',
-    documento_tutor: '',
-    numero_documento_tutor: '', // Se mantiene por si se usa en la API
     tipo_documento_tutor: '',
+    numero_documento_tutor: '',
     municipio_documento_tutor: '',
     correo_electronico_tutor: '',
     direccion_contacto_tutor: '',
@@ -24,6 +21,7 @@ export default function FormularioGeneradorPDF() {
   const [firmaAprendiz, setFirmaAprendiz] = useState('');
   const [firmaTutor, setFirmaTutor] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [isLoadingStep, setIsLoadingStep] = useState(false);
   const [error, setError] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -34,52 +32,116 @@ export default function FormularioGeneradorPDF() {
   const [isDrawingTutor, setIsDrawingTutor] = useState(false);
 
   // ============================================================================
-  // 2. MANEJO DE INPUTS DEL FORMULARIO
+  // 2. MANEJO DE INPUTS DEL FORMULARIO CON DEBOUNCE
   // ============================================================================
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
+  // Debounce para inputs de texto
+  const debounce = <T extends (...args: any[]) => void>(
+    func: T,
+    delay: number
+  ): ((...args: Parameters<T>) => void) => {
+    let timeoutId: NodeJS.Timeout;
+    return (...args: Parameters<T>) => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => func(...args), delay);
+    };
+  };
+
+  const handleInputChange = useCallback(
+    debounce((e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
+      const { name, value } = e.target;
+      setFormData(prev => ({
+        ...prev,
+        [name]: value
+      }));
+    }, 300),
+    []
+  );
+
+  // ============================================================================
+  // 3. VALIDACIÓN DE FORMULARIO
+  // ============================================================================
+
+  const validateStep1 = (): boolean => {
+    const requiredFields = ['nombre_tutor', 'tipo_documento_tutor', 'numero_documento_tutor'];
+    const isValid = requiredFields.every(field => 
+      formData[field as keyof typeof formData]?.trim().length > 0
+    );
+
+    // Validación específica de email si está presente
+    if (formData.correo_electronico_tutor && !isValidEmail(formData.correo_electronico_tutor)) {
+      setError('Por favor ingrese un correo electrónico válido');
+      return false;
+    }
+
+    return isValid;
+  };
+
+  const isValidEmail = (email: string): boolean => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    return emailRegex.test(email);
   };
 
   // ============================================================================
-  // 3. INICIALIZACIÓN Y FUNCIONES PARA CAPTURA DE FIRMAS (CANVAS)
+  // 4. INICIALIZACIÓN Y FUNCIONES PARA CAPTURA DE FIRMAS (MEJORADAS)
   // ============================================================================
 
-  const setupCanvas = (canvas: HTMLCanvasElement) => {
+  const setupCanvas = useCallback((canvas: HTMLCanvasElement) => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Solo configurar los estilos de dibujo
     ctx.strokeStyle = '#000';
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
-  };
-  
-  // HOOK DE EFECTO: Inicializa el canvas cuando el paso cambia (Soluciona Canvas Invisible)
-  useEffect(() => {
-    const heightInPx = 192; // h-48 en Tailwind
+    ctx.lineJoin = 'round';
+  }, []);
 
-    if (currentStep === 2 && canvasAprendizRef.current) {
-      // Configurar las dimensiones internas del canvas basado en el CSS
-      canvasAprendizRef.current.width = canvasAprendizRef.current.offsetWidth;
-      canvasAprendizRef.current.height = heightInPx; 
-      setupCanvas(canvasAprendizRef.current);
+  // HOOK DE EFECTO MEJORADO: Inicializa el canvas con Resize Observer
+  useEffect(() => {
+    const updateCanvasSize = (canvas: HTMLCanvasElement) => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = 192 * dpr;
+      
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.scale(dpr, dpr);
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+      }
+    };
+
+    const canvasAprendiz = canvasAprendizRef.current;
+    const canvasTutor = canvasTutorRef.current;
+
+    if (currentStep === 2 && canvasAprendiz) {
+      updateCanvasSize(canvasAprendiz);
+      
+      // Agregar observer para cambios de tamaño
+      const resizeObserver = new ResizeObserver(() => {
+        updateCanvasSize(canvasAprendiz);
+      });
+      
+      resizeObserver.observe(canvasAprendiz);
+      return () => resizeObserver.disconnect();
     }
     
-    if (currentStep === 3 && canvasTutorRef.current) {
-      // Configurar las dimensiones internas del canvas basado en el CSS
-      canvasTutorRef.current.width = canvasTutorRef.current.offsetWidth;
-      canvasTutorRef.current.height = heightInPx;
-      setupCanvas(canvasTutorRef.current);
+    if (currentStep === 3 && canvasTutor) {
+      updateCanvasSize(canvasTutor);
+      
+      const resizeObserver = new ResizeObserver(() => {
+        updateCanvasSize(canvasTutor);
+      });
+      
+      resizeObserver.observe(canvasTutor);
+      return () => resizeObserver.disconnect();
     }
-  }, [currentStep]);
-  
+  }, [currentStep, setupCanvas]);
 
-  const startDrawing = (
+  const startDrawing = useCallback((
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
     canvas: HTMLCanvasElement,
     setIsDrawing: (val: boolean) => void
@@ -88,9 +150,6 @@ export default function FormularioGeneradorPDF() {
     const rect = canvas.getBoundingClientRect();
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    
-    // Asegurar que el contexto está listo
-    setupCanvas(canvas); 
 
     ctx.beginPath();
     
@@ -98,53 +157,95 @@ export default function FormularioGeneradorPDF() {
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     
     ctx.moveTo(clientX - rect.left, clientY - rect.top);
-  };
+  }, []);
 
-  // FUNCIÓN CORREGIDA
-  const draw = (
+  const draw = useCallback((
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
     canvas: HTMLCanvasElement,
     isDrawing: boolean
   ) => {
     if (!isDrawing) return;
+    
+    e.preventDefault();
     const rect = canvas.getBoundingClientRect();
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
     
-    // Prevenir el desplazamiento de la página en móvil
-    e.preventDefault(); 
-    
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     
+    // Suavizar el trazo
+    ctx.lineJoin = 'round';
+    ctx.lineCap = 'round';
+    
     ctx.lineTo(clientX - rect.left, clientY - rect.top);
     ctx.stroke();
-  };
-  
-  // FUNCIÓN CORREGIDA
-  const stopDrawing = (setIsDrawing: (val: boolean) => void) => {
-    setIsDrawing(false);
-  };
+  }, []);
 
-  // FUNCIÓN CORREGIDA
-  const clearCanvas = (canvas: HTMLCanvasElement | null, setFirma: (val: string) => void) => {
+  const stopDrawing = useCallback((setIsDrawing: (val: boolean) => void) => {
+    setIsDrawing(false);
+  }, []);
+
+  const clearCanvas = useCallback((canvas: HTMLCanvasElement | null, setFirma: (val: string) => void) => {
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    // La limpieza debe ser sobre el área de dibujo
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    const dpr = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
     setFirma('');
-  };
+  }, []);
 
-  // FUNCIÓN CORREGIDA
-  const saveSignature = (canvas: HTMLCanvasElement | null, setFirma: (val: string) => void) => {
+  const saveSignature = useCallback((canvas: HTMLCanvasElement | null, setFirma: (val: string) => void) => {
     if (!canvas) return;
+    
+    // Verificar que el canvas no esté vacío
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const isEmpty = imageData.data.every(channel => channel === 0);
+    
+    if (isEmpty) {
+      setError('Por favor, realice una firma antes de guardar');
+      return;
+    }
+    
     const base64 = canvas.toDataURL('image/png');
     setFirma(base64);
-  };
+    setError('');
+  }, []);
 
   // ============================================================================
-  // 4. ENVÍO DEL FORMULARIO Y GENERACIÓN DEL PDF
+  // 5. NAVEGACIÓN ENTRE PASOS CON LOADING STATES
+  // ============================================================================
+
+  const goToStep = useCallback(async (step: number) => {
+    setIsLoadingStep(true);
+    setError('');
+
+    // Simular un pequeño delay para mejor UX
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    try {
+      if (step === 2 && !validateStep1()) {
+        setError('Por favor complete todos los campos requeridos (*)');
+        return;
+      }
+      
+      if (step === 3 && !firmaAprendiz) {
+        setError('Por favor guarde la firma del aprendiz antes de continuar');
+        return;
+      }
+      
+      setCurrentStep(step);
+    } finally {
+      setIsLoadingStep(false);
+    }
+  }, [formData, firmaAprendiz]);
+
+  // ============================================================================
+  // 6. ENVÍO DEL FORMULARIO Y GENERACIÓN DEL PDF (OPTIMIZADO)
   // ============================================================================
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -160,7 +261,12 @@ export default function FormularioGeneradorPDF() {
 
     try {
       const payload = {
-        ...formData,
+        nombre_tutor: formData.nombre_tutor.trim(),
+        tipo_documento_tutor: formData.tipo_documento_tutor,
+        numero_documento_tutor: formData.numero_documento_tutor.trim(),
+        municipio_documento_tutor: formData.municipio_documento_tutor.trim(),
+        correo_electronico_tutor: formData.correo_electronico_tutor.trim(),
+        direccion_contacto_tutor: formData.direccion_contacto_tutor.trim(),
         firma_aprendiz: firmaAprendiz,
         firma_tutor: firmaTutor,
       };
@@ -175,76 +281,146 @@ export default function FormularioGeneradorPDF() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || 'Error al generar el documento');
+        throw new Error(errorData.error || 'Error al generar los documentos');
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'acta_compromiso.pdf';
-      document.body.appendChild(a);
-      a.click();
-      window.URL.revokeObjectURL(url);
-      document.body.removeChild(a);
+      const result = await response.json();
 
-      alert('✅ Documento generado exitosamente');
-      
-      resetForm();
+      if (result.success) {
+        // Función para descargar PDF desde base64
+        const downloadPDF = (base64Data: string, filename: string) => {
+          const byteCharacters = atob(base64Data);
+          const byteNumbers = new Array(byteCharacters.length);
+          for (let i = 0; i < byteCharacters.length; i++) {
+            byteNumbers[i] = byteCharacters.charCodeAt(i);
+          }
+          const byteArray = new Uint8Array(byteNumbers);
+          const blob = new Blob([byteArray], { type: 'application/pdf' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = filename;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        };
+
+        // Descargar Acta de Compromiso
+        if (result.documentos.acta_compromiso.pdf_base64) {
+          downloadPDF(
+            result.documentos.acta_compromiso.pdf_base64,
+            result.documentos.acta_compromiso.filename
+          );
+        }
+
+        // Descargar Formato de Tratamiento de Datos (con delay)
+        if (result.documentos.tratamiento_datos.pdf_base64) {
+          setTimeout(() => {
+            downloadPDF(
+              result.documentos.tratamiento_datos.pdf_base64,
+              result.documentos.tratamiento_datos.filename
+            );
+          }, 500);
+        }
+
+        alert('✅ Documentos generados exitosamente. Se descargarán automáticamente.');
+        
+        resetForm();
+      } else {
+        throw new Error(result.message || 'Error al generar documentos');
+      }
 
     } catch (err) {
       console.error('Error:', err);
-      setError((err as Error).message || 'Error al generar el documento');
+      setError((err as Error).message || 'Error al generar los documentos');
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Resetea el formulario
+
   const resetForm = () => {
     setFormData({
       nombre_tutor: '',
-      cc_tutor: '',
-      ce_tutor: '',
-      documento_tutor: '',
-      tipo_documento_tutor: '',        // ← ✅ NUEVO campo
-      numero_documento_tutor: '', 
+      tipo_documento_tutor: '',
+      numero_documento_tutor: '',
       municipio_documento_tutor: '',
       correo_electronico_tutor: '',
       direccion_contacto_tutor: '',
     });
     setFirmaAprendiz('');
     setFirmaTutor('');
-    clearCanvas(canvasAprendizRef.current, setFirmaAprendiz);
-    clearCanvas(canvasTutorRef.current, setFirmaTutor);
+    
+    // Limpiar los canvas
+    if (canvasAprendizRef.current) {
+      const ctx = canvasAprendizRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasAprendizRef.current.width, canvasAprendizRef.current.height);
+      }
+    }
+    
+    if (canvasTutorRef.current) {
+      const ctx = canvasTutorRef.current.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvasTutorRef.current.width, canvasTutorRef.current.height);
+      }
+    }
+    
     setCurrentStep(1);
+    setError('');
+  };
+
+
+  // ============================================================================
+  // 7. COMPONENTES DE UI REUTILIZABLES
+  // ============================================================================
+
+  const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }) => (
+    <div className="relative group">
+      {children}
+      <div className="absolute bottom-full left-1/2 transform -translate-x-1/2 mb-2 px-2 py-1 bg-gray-900 text-white text-xs rounded opacity-0 group-hover:opacity-100 transition-opacity duration-200 pointer-events-none whitespace-nowrap z-10">
+        {text}
+        <div className="absolute top-full left-1/2 transform -translate-x-1/2 border-4 border-transparent border-t-gray-900"></div>
+      </div>
+    </div>
+  );
+
+  const LoadingSpinner = ({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) => {
+    const sizeClasses = {
+      sm: 'h-4 w-4',
+      md: 'h-5 w-5',
+      lg: 'h-6 w-6'
+    };
+
+    return (
+      <svg className={`animate-spin ${sizeClasses[size]} text-white`} xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+      </svg>
+    );
   };
 
   // ============================================================================
-  // 5. RENDERIZADO CON MEJORAS DE DISEÑO
-  // ============================================================================
-
-// ... (Las funciones handleSubmit, resetForm y todo lo anterior se mantienen igual) ...
-
-  // ============================================================================
-  // 5. RENDERIZADO DE PASOS DEL FORMULARIO (NUEVO DISEÑO SIMPLE)
+  // 8. RENDERIZADO DEL COMPONENTE
   // ============================================================================
 
   return (
-    // Fondo más simple
     <div className="min-h-screen bg-gray-50 py-12 px-4">
       <div className="max-w-4xl mx-auto">
         
-        {/* Header - Limpio y simple */}
+        {/* Header */}
         <header className="bg-white rounded-xl shadow-lg p-6 mb-8 border-l-4 border-teal-600">
           <h1 className="text-4xl font-extrabold text-gray-900 mb-1">
-            Generador de Documentos SENA
+            Generador de formatos para matricula del SENA
           </h1>
           <p className="text-base text-gray-600">
             Complete los pasos para generar y descargar los formatos de Acta de Compromiso.
           </p>
         </header>
 
-        {/* Indicador de Pasos - Lista vertical simple */}
+        {/* Indicador de Pasos */}
         <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
           <h3 className="text-lg font-semibold text-gray-700 mb-3 border-b pb-2">Progreso</h3>
           <ol className="flex justify-between space-x-2">
@@ -283,27 +459,40 @@ export default function FormularioGeneradorPDF() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nombre Completo del Tutor *</label>
+                  <Tooltip text="Nombre completo del tutor o representante legal">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nombre Completo del Tutor *
+                    </label>
+                  </Tooltip>
                   <input
                     type="text"
                     name="nombre_tutor"
-                    value={formData.nombre_tutor}
+                    defaultValue={formData.nombre_tutor}
                     onChange={handleInputChange}
                     required
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
                     placeholder="Ej: María Fernanda González"
+                    aria-describedby="nombre-tutor-help"
                   />
+                  <p id="nombre-tutor-help" className="text-xs text-gray-500 mt-1">
+                    Nombre completo según documento de identidad
+                  </p>
                 </div>
 
-                {/* AGREGAR ESTE BLOQUE NUEVO */}
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Documento de Identidad del Tutor *</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Documento de Identidad del Tutor *
+                  </label>
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Tipo de Documento</label>
+                      <Tooltip text="Seleccione el tipo de documento de identidad">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Tipo de Documento *
+                        </label>
+                      </Tooltip>
                       <select
                         name="tipo_documento_tutor"
-                        value={formData.tipo_documento_tutor}
+                        defaultValue={formData.tipo_documento_tutor}
                         onChange={handleInputChange}
                         required
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
@@ -318,11 +507,15 @@ export default function FormularioGeneradorPDF() {
                     </div>
                     
                     <div>
-                      <label className="block text-xs text-gray-600 mb-1">Número de Documento</label>
+                      <Tooltip text="Número completo del documento sin puntos ni espacios">
+                        <label className="block text-xs text-gray-600 mb-1">
+                          Número de Documento *
+                        </label>
+                      </Tooltip>
                       <input
                         type="text"
                         name="numero_documento_tutor"
-                        value={formData.numero_documento_tutor}
+                        defaultValue={formData.numero_documento_tutor}
                         onChange={handleInputChange}
                         required
                         className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
@@ -333,35 +526,15 @@ export default function FormularioGeneradorPDF() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">N° Cédula de Extranjería</label>
-                  <input
-                    type="text"
-                    name="ce_tutor"
-                    value={formData.ce_tutor}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
-                    placeholder="Solo si aplica"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">N° Documento Principal</label>
-                  <input
-                    type="text"
-                    name="documento_tutor"
-                    value={formData.documento_tutor}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
-                    placeholder="Documento principal"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Municipio de Expedición</label>
+                  <Tooltip text="Municipio donde fue expedido el documento">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Municipio de Expedición
+                    </label>
+                  </Tooltip>
                   <input
                     type="text"
                     name="municipio_documento_tutor"
-                    value={formData.municipio_documento_tutor}
+                    defaultValue={formData.municipio_documento_tutor}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
                     placeholder="Ej: Popayán"
@@ -369,11 +542,15 @@ export default function FormularioGeneradorPDF() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Correo Electrónico</label>
+                  <Tooltip text="Correo electrónico para contacto y notificaciones">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Correo Electrónico
+                    </label>
+                  </Tooltip>
                   <input
                     type="email"
                     name="correo_electronico_tutor"
-                    value={formData.correo_electronico_tutor}
+                    defaultValue={formData.correo_electronico_tutor}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
                     placeholder="ejemplo@correo.com"
@@ -381,11 +558,15 @@ export default function FormularioGeneradorPDF() {
                 </div>
 
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Dirección de Contacto</label>
+                  <Tooltip text="Dirección completa para notificaciones oficiales">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Dirección de Contacto
+                    </label>
+                  </Tooltip>
                   <input
                     type="text"
                     name="direccion_contacto_tutor"
-                    value={formData.direccion_contacto_tutor}
+                    defaultValue={formData.direccion_contacto_tutor}
                     onChange={handleInputChange}
                     className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
                     placeholder="Ej: Calle 5 #12-34, Popayán"
@@ -393,12 +574,26 @@ export default function FormularioGeneradorPDF() {
                 </div>
               </div>
 
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {error}
+                </div>
+              )}
+
               <button
                 type="button"
-                onClick={() => setCurrentStep(2)}
-                className="w-full mt-6 bg-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md"
+                onClick={() => goToStep(2)}
+                disabled={isLoadingStep}
+                className="w-full mt-6 bg-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
-                Continuar a Firma del Aprendiz →
+                {isLoadingStep ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    Validando...
+                  </>
+                ) : (
+                  'Continuar a Firma del Aprendiz →'
+                )}
               </button>
             </div>
           )}
@@ -418,7 +613,7 @@ export default function FormularioGeneradorPDF() {
                   ref={canvasAprendizRef}
                   width={700}
                   height={200}
-                  className="border border-gray-400 rounded bg-white w-full cursor-crosshair"
+                  className="border border-gray-400 rounded bg-white w-full cursor-crosshair touch-none"
                   onMouseDown={(e) => canvasAprendizRef.current && startDrawing(e, canvasAprendizRef.current, setIsDrawingAprendiz)}
                   onMouseMove={(e) => canvasAprendizRef.current && draw(e, canvasAprendizRef.current, isDrawingAprendiz)}
                   onMouseUp={() => stopDrawing(setIsDrawingAprendiz)}
@@ -426,6 +621,7 @@ export default function FormularioGeneradorPDF() {
                   onTouchStart={(e) => canvasAprendizRef.current && startDrawing(e, canvasAprendizRef.current, setIsDrawingAprendiz)}
                   onTouchMove={(e) => canvasAprendizRef.current && draw(e, canvasAprendizRef.current, isDrawingAprendiz)}
                   onTouchEnd={() => stopDrawing(setIsDrawingAprendiz)}
+                  aria-label="Área para capturar la firma del aprendiz"
                 />
                 <div className="flex gap-3 mt-4">
                   <button
@@ -450,26 +646,35 @@ export default function FormularioGeneradorPDF() {
                 )}
               </div>
 
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                  {error}
+                </div>
+              )}
+
               <div className="flex gap-4 pt-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(1)}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  onClick={() => goToStep(1)}
+                  disabled={isLoadingStep}
+                  className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  ← Volver a Datos
+                  {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver a Datos'}
                 </button>
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!firmaAprendiz) {
-                      alert('Por favor guarde la firma antes de continuar');
-                      return;
-                    }
-                    setCurrentStep(3);
-                  }}
-                  className="flex-1 bg-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md"
+                  onClick={() => goToStep(3)}
+                  disabled={isLoadingStep || !firmaAprendiz}
+                  className="flex-1 bg-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  Continuar a Firma del Tutor →
+                  {isLoadingStep ? (
+                    <>
+                      <LoadingSpinner size="sm" />
+                      Validando...
+                    </>
+                  ) : (
+                    'Continuar a Firma del Tutor →'
+                  )}
                 </button>
               </div>
             </div>
@@ -490,7 +695,7 @@ export default function FormularioGeneradorPDF() {
                   ref={canvasTutorRef}
                   width={700}
                   height={200}
-                  className="border border-gray-400 rounded bg-white w-full cursor-crosshair"
+                  className="border border-gray-400 rounded bg-white w-full cursor-crosshair touch-none"
                   onMouseDown={(e) => canvasTutorRef.current && startDrawing(e, canvasTutorRef.current, setIsDrawingTutor)}
                   onMouseMove={(e) => canvasTutorRef.current && draw(e, canvasTutorRef.current, isDrawingTutor)}
                   onMouseUp={() => stopDrawing(setIsDrawingTutor)}
@@ -498,6 +703,7 @@ export default function FormularioGeneradorPDF() {
                   onTouchStart={(e) => canvasTutorRef.current && startDrawing(e, canvasTutorRef.current, setIsDrawingTutor)}
                   onTouchMove={(e) => canvasTutorRef.current && draw(e, canvasTutorRef.current, isDrawingTutor)}
                   onTouchEnd={() => stopDrawing(setIsDrawingTutor)}
+                  aria-label="Área para capturar la firma del tutor legal"
                 />
                 <div className="flex gap-3 mt-4">
                   <button
@@ -523,7 +729,7 @@ export default function FormularioGeneradorPDF() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg mt-6">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
                   {error}
                 </div>
               )}
@@ -531,10 +737,11 @@ export default function FormularioGeneradorPDF() {
               <div className="flex gap-4 pt-4 border-t border-gray-200">
                 <button
                   type="button"
-                  onClick={() => setCurrentStep(2)}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
+                  onClick={() => goToStep(2)}
+                  disabled={isLoadingStep}
+                  className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                 >
-                  ← Volver a Firma Aprendiz
+                  {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver a Firma Aprendiz'}
                 </button>
                 <button
                   type="button"
@@ -544,10 +751,7 @@ export default function FormularioGeneradorPDF() {
                 >
                   {isLoading ? (
                     <>
-                      <svg className="animate-spin h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                      </svg>
+                      <LoadingSpinner />
                       Generando PDF...
                     </>
                   ) : (

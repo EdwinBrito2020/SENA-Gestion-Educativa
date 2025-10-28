@@ -5,18 +5,8 @@
  * 
  * Endpoint: POST /api/generar-formatos
  * 
- * Este microservicio recibe datos del usuario, los combina con datos simulados
- * de la API/DB, genera los PDFs correspondientes, y los retorna para descarga.
- * También incluye lógica para almacenamiento futuro en Supabase Storage.
- * 
- * FLUJO COMPLETO:
- * 1. Recibir y validar datos del POST
- * 2. Simular datos de la API/DB
- * 3. Calcular datos automáticos (fecha)
- * 4. Cargar PDFs base desde /public
- * 5. Generar documentos llenados
- * 6. Almacenar en Supabase (preparado)
- * 7. Retornar PDF al usuario para descarga
+ * Este microservicio genera ambos PDFs y los retorna para descarga directa.
+ * El almacenamiento en Supabase está desactivado temporalmente.
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -29,28 +19,9 @@ import {
   CalculatedData 
 } from '@/lib/types';
 import { generateDocuments } from '@/lib/pdf-utils';
-import { storeGeneratedDocuments } from '@/lib/supabase-config';
 
-// ============================================================================
-// 1. CONFIGURACIÓN DE LA API ROUTE
-// ============================================================================
-
-/**
- * Configuración del runtime de Next.js
- * 'nodejs' permite el uso de fs para leer archivos del sistema
- */
 export const runtime = 'nodejs';
 
-// ============================================================================
-// 2. HANDLER PRINCIPAL DEL ENDPOINT POST
-// ============================================================================
-
-/**
- * Maneja las peticiones POST al endpoint /api/generar-formatos
- * 
- * @param request - Request de Next.js con los datos del usuario
- * @returns Response con el PDF generado o mensaje de error
- */
 export async function POST(request: NextRequest) {
   try {
     console.log('[API] Solicitud recibida en /api/generar-formatos');
@@ -76,8 +47,8 @@ export async function POST(request: NextRequest) {
     const requiredUserFields: (keyof UserDataPayload)[] = [
       'firma_aprendiz',
       'firma_tutor',
-      'tipo_documento_tutor',      // ← NUEVO
-      'numero_documento_tutor',    // ← NUEVO
+      'tipo_documento_tutor',
+      'numero_documento_tutor',
       'nombre_tutor',
     ];
 
@@ -95,23 +66,13 @@ export async function POST(request: NextRequest) {
     // PASO 2: SIMULAR DATOS DE LA API/BASE DE DATOS
     // ========================================================================
     
-    /**
-     * NOTA IMPORTANTE: Estos datos están simulados para desarrollo.
-     * En producción, estos datos se obtendrían de:
-     * - Una consulta a la base de datos
-     * - Una llamada a otra API interna
-     * - El sistema de gestión del SENA
-     * 
-     * Para implementar en producción, reemplazar con:
-     * const aprendizData = await fetchAprendizDataFromDB(aprendizId);
-     */
     const aprendizDataSimulado: AprendizDataFromAPI = {
       nombre_aprendiz: 'Juan Pérez García',
-      tipo_documento_aprendiz: 'TI', // Cambiar a 'CC', 'CE', 'Otro' para probar diferentes flujos
-      cual_tipo_id_aprendiz: '', // Solo si tipo es 'Otro'
-      numero_documento_aprendiz: '1234567890',
+      tipo_documento_aprendiz: 'TI',
+      cual_tipo_id_aprendiz: '',
+      numero_documento_aprendiz: '1123456780',
       programa_formacion: 'Tecnología en Análisis y Desarrollo de Software',
-      numero_ficha: '2845123',
+      numero_ficha: '7825999',
       centro_formacion: 'Centro de Servicios y Gestión Empresarial',
       ciudad: 'Popayán',
       regional: 'Cauca',
@@ -120,7 +81,6 @@ export async function POST(request: NextRequest) {
     console.log('[API] Datos simulados cargados:', {
       aprendiz: aprendizDataSimulado.nombre_aprendiz,
       documento: aprendizDataSimulado.numero_documento_aprendiz,
-      tipo: aprendizDataSimulado.tipo_documento_aprendiz,
     });
 
     // ========================================================================
@@ -174,11 +134,10 @@ export async function POST(request: NextRequest) {
     
     console.log('[API] Iniciando generación de documentos...');
 
-    // Luego convertir a Uint8Array:
     const generatedDocs = await generateDocuments(
       fullData,
-      new Uint8Array(actaPdfBuffer),  // ← Conversión correcta
-      new Uint8Array(tratamientoPdfBuffer)  // ← Conversión correcta
+      new Uint8Array(actaPdfBuffer),
+      new Uint8Array(tratamientoPdfBuffer)
     );
 
     console.log('[API] Documentos generados exitosamente:', {
@@ -187,71 +146,38 @@ export async function POST(request: NextRequest) {
     });
 
     // ========================================================================
-    // PASO 7: ALMACENAR EN SUPABASE STORAGE (PREPARADO PARA IMPLEMENTACIÓN)
+    // PASO 7: RETORNAR AMBOS PDFs PARA DESCARGA DIRECTA
     // ========================================================================
     
-    /**
-     * NOTA: Esta sección está preparada para almacenar los PDFs en Supabase.
-     * Para activarla en producción:
-     * 1. Configurar las variables de entorno en .env.local
-     * 2. Crear el bucket en Supabase Storage
-     * 3. Descomentar el código de almacenamiento
-     * 
-     * El código está listo para usar, solo necesita configuración.
-     */
-    
-    console.log('[API] Preparando almacenamiento en Supabase...');
-    
-    // Descomentar para activar almacenamiento en Supabase:
-    /*
-    const storageResult = await storeGeneratedDocuments(
-      generatedDocs.actaCompromiso.buffer,
-      generatedDocs.actaCompromiso.filename,
-      generatedDocs.tratamientoDatos?.buffer,
-      generatedDocs.tratamientoDatos?.filename
-    );
+    console.log('[API] Preparando respuesta con ambos PDFs...');
 
-    console.log('[API] Resultado del almacenamiento:', storageResult);
-    */
-
-    // Placeholder para desarrollo (remover en producción)
-    console.log('[API] Almacenamiento en Supabase: PENDIENTE DE CONFIGURACIÓN');
-    console.log('[API] Archivos a almacenar:', {
-      acta: generatedDocs.actaCompromiso.filename,
-      tratamiento: generatedDocs.tratamientoDatos?.filename || 'N/A',
-    });
-
-    // ========================================================================
-    // PASO 8: RETORNAR EL PDF AL USUARIO PARA DESCARGA
-    // ========================================================================
-    
-    /**
-     * Retornamos el Acta de Compromiso como respuesta principal
-     * El usuario lo descargará automáticamente en su navegador
-     * 
-     * Headers importantes:
-     * - Content-Type: application/pdf (indica que es un PDF)
-     * - Content-Disposition: attachment (fuerza la descarga)
-     * - filename: nombre del archivo con formato [documento]_[tipo].pdf
-     */
-    
-    // USAR Response NATIVO en lugar de NextResponse
-
-    console.log('[API] Enviando respuesta con PDF...', {
-      filename: generatedDocs.actaCompromiso.filename,
-      size: `${(generatedDocs.actaCompromiso.buffer.length / 1024).toFixed(2)} KB`,
-    });
-
-    // SOLUCIÓN MÁS SIMPLE: Convertir a Buffer temporalmente solo para la respuesta
-    return new NextResponse(Buffer.from(generatedDocs.actaCompromiso.buffer), {
-      status: 200,
-      headers: {
-        'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="${generatedDocs.actaCompromiso.filename}"`,
-        'Content-Length': generatedDocs.actaCompromiso.buffer.length.toString(),
+    const responseData = {
+      success: true,
+      message: 'Documentos generados exitosamente',
+      documentos: {
+        acta_compromiso: {
+          filename: generatedDocs.actaCompromiso.filename,
+          pdf_base64: Buffer.from(generatedDocs.actaCompromiso.buffer).toString('base64'),
+          size: generatedDocs.actaCompromiso.buffer.length,
+        },
+        tratamiento_datos: {
+          filename: generatedDocs.tratamientoDatos?.filename,
+          pdf_base64: generatedDocs.tratamientoDatos ? 
+            Buffer.from(generatedDocs.tratamientoDatos.buffer).toString('base64') : null,
+          size: generatedDocs.tratamientoDatos?.buffer.length,
+        }
       },
-    });
+      metadata: {
+        aprendiz: fullData.nombre_aprendiz,
+        tutor: fullData.nombre_tutor,
+        fecha_generacion: new Date().toISOString(),
+        nota: 'Almacenamiento en Supabase desactivado temporalmente'
+      }
+    };
 
+    console.log('[API] Enviando respuesta con PDFs en base64');
+
+    return NextResponse.json(responseData, { status: 200 });
 
   } catch (error) {
     // ========================================================================
@@ -271,20 +197,9 @@ export async function POST(request: NextRequest) {
 }
 
 // ============================================================================
-// 3. FUNCIONES AUXILIARES
+// FUNCIONES AUXILIARES
 // ============================================================================
 
-/**
- * Calcula la fecha actual en diferentes formatos
- * 
- * @returns Objeto con día, mes, año y fecha completa formateada
- * 
- * FORMATOS:
- * - dia: "26"
- * - mes: "octubre"
- * - año: "2025"
- * - fecha: "26 de octubre de 2025"
- */
 function calculateCurrentDate(): CalculatedData {
   const ahora = new Date();
   
@@ -302,32 +217,19 @@ function calculateCurrentDate(): CalculatedData {
 }
 
 // ============================================================================
-// 4. HANDLER PARA OTROS MÉTODOS HTTP (OPCIONAL)
+// HANDLER GET PARA INFORMACIÓN
 // ============================================================================
 
-/**
- * Maneja peticiones GET (para testing o información del endpoint)
- */
 export async function GET() {
   return NextResponse.json({
     endpoint: '/api/generar-formatos',
     method: 'POST',
-    description: 'Microservicio para generar documentos PDF del SENA',
-    version: '1.0.0',
-    status: 'operational',
-    requiredFields: [
-      'firma_aprendiz (Base64)',
-      'firma_tutor (Base64)',
-      'tipo_y_documento_tutor',
-      'nombre_tutor',
-      'cc_tutor',
-      'ce_tutor',
-      'documento_tutor',
-      'municipio_documento_tutor',
-      'correo_electronico_tutor',
-      'direccion_contacto_tutor',
+    description: 'Generar documentos PDF del SENA (descarga directa)',
+    status: 'Almacenamiento en Supabase desactivado temporalmente',
+    generates: [
+      'Acta de Compromiso',
+      'Formato de Tratamiento de Datos'
     ],
-    response: 'PDF file (application/pdf)',
-    docs: 'https://tu-documentacion.com/api/generar-formatos',
+    note: 'Los PDFs se retornan en base64 para descarga directa'
   });
 }
