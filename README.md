@@ -69,3 +69,56 @@ git push origin feat/mi-cambio
 
 Soporte
 - Si necesitas ayuda para configurar Supabase Desktop o el flujo de autenticación con GitHub, dime y preparo instrucciones paso a paso.
+
+Autenticación con GitHub (PAT o SSH)
+
+Para clonar y hacer push a GitHub desde otra máquina, tienes dos opciones seguras recomendadas: Personal Access Token (PAT) por HTTPS o claves SSH. A continuación tienes pasos cortos para ambas en Windows (PowerShell).
+
+1) Usar un Personal Access Token (HTTPS)
+
+- Crear el PAT en GitHub:
+	1. Entra a https://github.com/settings/tokens
+	2. Haz clic en "Generate new token" → elegir "Fine-grained" o clásico según tu preferencia.
+	3. Otorga permisos para repos (repo) y/o workflow según necesites. Copia el token una vez creado.
+
+- Clonar y usar el PAT (PowerShell):
+
+```powershell
+# Clonar con HTTPS (te pedirá usuario y contraseña). Como contraseña pega el PAT.
+git clone https://github.com/EdwinBrito2020/SENA-Gestion-Educativa.git
+
+# O, si prefieres no introducirlo cada vez, configura el helper de credenciales de Windows:
+git config --global credential.helper manager
+# Luego el primer push/clone te pedirá usuario y PAT y el Helper los guardará de forma segura.
+```
+
+Nota: para scripts automatizados evita poner el PAT en URLs en texto plano. Usa el helper de credenciales o variables de entorno en CI.
+
+2) Usar claves SSH (recomendado para desarrolladores frecuentes)
+
+- Generar una clave SSH en Windows (PowerShell):
+
+```powershell
+# Generar clave (acepta la ruta por defecto y opcionalmente una passphrase)
+ssh-keygen -t ed25519 -C "tu-email@example.com"
+
+# Copiar la clave pública al portapapeles (PowerShell)
+Get-Content $env:USERPROFILE\.ssh\id_ed25519.pub | Set-Clipboard
+```
+
+- Añadir la clave pública a GitHub:
+	1. En GitHub ve a Settings → SSH and GPG keys → New SSH key.
+	2. Pega la clave pública (lo que copiaste) y guarda.
+
+- Clonar usando SSH:
+
+```powershell
+git clone git@github.com:EdwinBrito2020/SENA-Gestion-Educativa.git
+```
+
+Ventajas y notas rápidas
+- SSH evita introducir credenciales continuamente y es más cómodo una vez configurado.
+- PAT + Credential Manager es sencillo y funciona bien si prefieres HTTPS.
+- Si trabajas en varias máquinas, genera claves diferentes por máquina y etiqueta cada clave en GitHub.
+
+Si quieres, puedo generar un pequeño checklist personalizado con comandos exactos para tu otra máquina y validar que el push/pull funciona desde allí.
