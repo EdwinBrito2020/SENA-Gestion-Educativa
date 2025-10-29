@@ -20,6 +20,35 @@ import {
 } from '@/lib/types';
 import { generateDocuments } from '@/lib/pdf-utils';
 
+// ============================================================================
+// temporarl borar luego
+// ============================================================================
+
+async function diagnosticarCamposPDF(pdfBuffer: Uint8Array, nombre: string) {
+  try {
+    const { PDFDocument } = await import('pdf-lib');
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
+    const form = pdfDoc.getForm();
+    const fields = form.getFields();
+    
+    console.log(`=== CAMPOS DISPONIBLES EN ${nombre} ===`);
+    fields.forEach(field => {
+      console.log(`- ${field.getName()}: ${field.constructor.name}`);
+    });
+    console.log(`=== TOTAL: ${fields.length} campos ===`);
+    
+    return fields.map(f => f.getName());
+  } catch (error) {
+    console.error(`Error en diagnóstico de ${nombre}:`, error);
+    return [];
+  }
+}
+
+// ============================================================================
+// borrar lo anterior  
+// ============================================================================
+
+
 export const runtime = 'nodejs';
 
 export async function POST(request: NextRequest) {
@@ -67,12 +96,12 @@ export async function POST(request: NextRequest) {
     // ========================================================================
     
     const aprendizDataSimulado: AprendizDataFromAPI = {
-      nombre_aprendiz: 'Juan Pérez García',
-      tipo_documento_aprendiz: 'TI',
-      cual_tipo_id_aprendiz: '',
-      numero_documento_aprendiz: '1123456780',
+      nombre_aprendiz: 'Juan Felipe Pérez García',
+      tipo_documento_aprendiz: 'Otro',
+      cual_tipo_id_aprendiz: 'Pasaporte',
+      numero_documento_aprendiz: '3223456780',
       programa_formacion: 'Tecnología en Análisis y Desarrollo de Software',
-      numero_ficha: '7825999',
+      numero_ficha: '7725999',
       centro_formacion: 'Centro de Servicios y Gestión Empresarial',
       ciudad: 'Popayán',
       regional: 'Cauca',

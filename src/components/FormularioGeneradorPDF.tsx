@@ -500,9 +500,7 @@ export default function FormularioGeneradorPDF() {
                         <option value="">Seleccionar tipo...</option>
                         <option value="CC">Cédula de Ciudadanía</option>
                         <option value="CE">Cédula de Extranjería</option>
-                        <option value="TI">Tarjeta de Identidad</option>
                         <option value="Pasaporte">Pasaporte</option>
-                        <option value="Otro">Otro</option>
                       </select>
                     </div>
                     
