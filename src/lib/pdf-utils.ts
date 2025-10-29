@@ -179,9 +179,9 @@ async function fillActaCompromiso(
     // Campos individuales del tutor
     const documentoTutorFormateado = formatDocumentNumber(data.numero_documento_tutor);
     setTextField(form, 'documento_tutor', documentoTutorFormateado);
-    setTextField(form, 'municipio_documento_tutor', data.municipio_documento_tutor);
-    setTextField(form, 'correo_electronico_tutor', data.correo_electronico_tutor);
-    setTextField(form, 'direccion_contacto_tutor', data.direccion_contacto_tutor);
+    // setTextField(form, 'municipio_documento_tutor', data.municipio_documento_tutor);
+    // setTextField(form, 'correo_electronico_tutor', data.correo_electronico_tutor);
+    // setTextField(form, 'direccion_contacto_tutor', data.direccion_contacto_tutor);
 
     // PASO 7: Llenar la fecha
     setTextField(form, 'dia', data.dia);

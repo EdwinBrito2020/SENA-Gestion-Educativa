@@ -24,6 +24,8 @@ export default function FormularioGeneradorPDF() {
   const [isLoadingStep, setIsLoadingStep] = useState(false);
   const [error, setError] = useState('');
   const [currentStep, setCurrentStep] = useState(1);
+  const [esMenorDeEdad, setEsMenorDeEdad] = useState<boolean | null>(null);
+  const [isMobile, setIsMobile] = useState(false);
 
   // Referencias para los canvas de firma
   const canvasAprendizRef = useRef<HTMLCanvasElement>(null);
@@ -32,7 +34,22 @@ export default function FormularioGeneradorPDF() {
   const [isDrawingTutor, setIsDrawingTutor] = useState(false);
 
   // ============================================================================
-  // 2. MANEJO DE INPUTS DEL FORMULARIO CON DEBOUNCE
+  // 2. DETECCIÓN DE DISPOSITIVO MÓVIL
+  // ============================================================================
+
+  useEffect(() => {
+    const checkMobile = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  // ============================================================================
+  // 3. MANEJO DE INPUTS DEL FORMULARIO CON DEBOUNCE
   // ============================================================================
 
   // Debounce para inputs de texto
@@ -59,22 +76,36 @@ export default function FormularioGeneradorPDF() {
   );
 
   // ============================================================================
-  // 3. VALIDACIÓN DE FORMULARIO
+  // 4. VALIDACIÓN DE FORMULARIO
   // ============================================================================
 
   const validateStep1 = (): boolean => {
-    const requiredFields = ['nombre_tutor', 'tipo_documento_tutor', 'numero_documento_tutor'];
-    const isValid = requiredFields.every(field => 
+    // Campos requeridos para todos
+    const camposRequeridosBase = ['nombre_tutor', 'tipo_documento_tutor', 'numero_documento_tutor'];
+    
+    // Si es menor de edad, agregar campos adicionales requeridos
+    const camposRequeridosAdicionales = esMenorDeEdad 
+      ? ['municipio_documento_tutor', 'correo_electronico_tutor', 'direccion_contacto_tutor']
+      : [];
+
+    const todosCamposRequeridos = [...camposRequeridosBase, ...camposRequeridosAdicionales];
+    
+    const isValid = todosCamposRequeridos.every(field => 
       formData[field as keyof typeof formData]?.trim().length > 0
     );
 
-    // Validación específica de email si está presente
+    // Validación específica de email si está presente y es requerido
     if (formData.correo_electronico_tutor && !isValidEmail(formData.correo_electronico_tutor)) {
       setError('Por favor ingrese un correo electrónico válido');
       return false;
     }
 
-    return isValid;
+    if (!isValid) {
+      setError('Por favor complete todos los campos requeridos (*)');
+      return false;
+    }
+
+    return true;
   };
 
   const isValidEmail = (email: string): boolean => {
@@ -83,7 +114,7 @@ export default function FormularioGeneradorPDF() {
   };
 
   // ============================================================================
-  // 4. INICIALIZACIÓN Y FUNCIONES PARA CAPTURA DE FIRMAS (MEJORADAS)
+  // 5. INICIALIZACIÓN Y FUNCIONES PARA CAPTURA DE FIRMAS (MEJORADAS)
   // ============================================================================
 
   const setupCanvas = useCallback((canvas: HTMLCanvasElement) => {
@@ -102,7 +133,7 @@ export default function FormularioGeneradorPDF() {
       const rect = canvas.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
       canvas.width = rect.width * dpr;
-      canvas.height = 192 * dpr;
+      canvas.height = 180 * dpr;
       
       const ctx = canvas.getContext('2d');
       if (ctx) {
@@ -140,6 +171,21 @@ export default function FormularioGeneradorPDF() {
       return () => resizeObserver.disconnect();
     }
   }, [currentStep, setupCanvas]);
+
+  // ✅ OBTENER DATOS DEL APRENDIZ
+  useEffect(() => {
+    fetch('/api/generar-formatos')
+      .then(res => res.json())
+      .then(data => {
+        const esMenor = data.aprendiz.tipo_documento_aprendiz === 'TI';
+        setEsMenorDeEdad(esMenor);
+        console.log('[Frontend] Tipo documento aprendiz:', data.aprendiz.tipo_documento_aprendiz, 'Es menor:', esMenor);
+      })
+      .catch((err) => {
+        console.error('Error fetching data:', err);
+        setEsMenorDeEdad(false); // Por defecto mayor de edad en caso de error
+      });
+  }, []);
 
   const startDrawing = useCallback((
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
@@ -217,7 +263,7 @@ export default function FormularioGeneradorPDF() {
   }, []);
 
   // ============================================================================
-  // 5. NAVEGACIÓN ENTRE PASOS CON LOADING STATES
+  // 6. NAVEGACIÓN ENTRE PASOS CON LOADING STATES
   // ============================================================================
 
   const goToStep = useCallback(async (step: number) => {
@@ -245,7 +291,7 @@ export default function FormularioGeneradorPDF() {
   }, [formData, firmaAprendiz]);
 
   // ============================================================================
-  // 6. ENVÍO DEL FORMULARIO Y GENERACIÓN DEL PDF (OPTIMIZADO)
+  // 7. ENVÍO DEL FORMULARIO Y GENERACIÓN DEL PDF (OPTIMIZADO)
   // ============================================================================
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -340,7 +386,6 @@ export default function FormularioGeneradorPDF() {
   };
 
   // Resetea el formulario
-
   const resetForm = () => {
     setFormData({
       nombre_tutor: '',
@@ -372,9 +417,8 @@ export default function FormularioGeneradorPDF() {
     setError('');
   };
 
-
   // ============================================================================
-  // 7. COMPONENTES DE UI REUTILIZABLES
+  // 8. COMPONENTES DE UI REUTILIZABLES
   // ============================================================================
 
   const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }) => (
@@ -403,35 +447,51 @@ export default function FormularioGeneradorPDF() {
   };
 
   // ============================================================================
-  // 8. RENDERIZADO DEL COMPONENTE
+  // 9. RENDERIZADO DEL COMPONENTE (RESPONSIVE)
   // ============================================================================
 
   return (
-    <div className="min-h-screen bg-gray-50 py-12 px-4">
+    <div className="min-h-screen bg-gray-50 py-6 px-3 sm:py-12 sm:px-4">
       <div className="max-w-4xl mx-auto">
         
         {/* Header */}
-        <header className="bg-white rounded-xl shadow-lg p-6 mb-8 border-l-4 border-teal-600">
-          <h1 className="text-4xl font-extrabold text-gray-900 mb-1">
+        <header className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6 sm:mb-8 border-l-4 border-teal-600">
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-extrabold text-gray-900 mb-1">
             Generador de formatos para matricula del SENA
           </h1>
-          <p className="text-base text-gray-600">
+          <p className="text-sm sm:text-base text-gray-600">
             Complete los pasos para generar y descargar los formatos de Acta de Compromiso.
           </p>
+          <div className={`mt-3 rounded-lg p-3 ${
+            esMenorDeEdad === null 
+              ? 'bg-gray-50 border border-gray-200 text-gray-600' 
+              : esMenorDeEdad
+                ? 'bg-blue-50 border border-blue-200 text-blue-700'
+                : 'bg-green-50 border border-green-200 text-green-700'
+          }`}>
+            <p className="text-sm font-medium">
+              {esMenorDeEdad === null 
+                ? '⏳ Verificando datos del aprendiz...'
+                : esMenorDeEdad
+                  ? '🔒 El aprendiz es menor de edad - Se requiere información completa del tutor legal'
+                  : '✅ El aprendiz es mayor de edad - Solo se requiere información básica del responsable'
+              }
+            </p>
+          </div>
         </header>
 
         {/* Indicador de Pasos */}
-        <div className="bg-white rounded-xl shadow-lg p-6 mb-8">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6 sm:mb-8">
           <h3 className="text-lg font-semibold text-gray-700 mb-3 border-b pb-2">Progreso</h3>
-          <ol className="flex justify-between space-x-2">
+          <ol className="flex flex-col sm:flex-row justify-between gap-2 sm:gap-0">
             {[
-              { id: 1, label: 'Tutor Legal' },
+              { id: 1, label: esMenorDeEdad ? 'Tutor Legal' : 'Responsable' },
               { id: 2, label: 'Firma Aprendiz' },
               { id: 3, label: 'Firma Tutor' },
             ].map((step) => (
               <li key={step.id} className="flex-1 text-center">
                 <div className={`
-                  p-3 rounded-lg border-2 transition-colors duration-300
+                  p-2 sm:p-3 rounded-lg border-2 transition-colors duration-300 text-sm sm:text-base
                   ${currentStep === step.id 
                     ? 'bg-teal-600 border-teal-600 text-white shadow-md' 
                     : currentStep > step.id
@@ -440,7 +500,7 @@ export default function FormularioGeneradorPDF() {
                   }
                 `}>
                   <span className="font-bold block">Paso {step.id}</span>
-                  <span className="text-sm">{step.label}</span>
+                  <span className="text-xs sm:text-sm">{step.label}</span>
                 </div>
               </li>
             ))}
@@ -448,20 +508,35 @@ export default function FormularioGeneradorPDF() {
         </div>
 
         {/* Formulario Principal */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
+        <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8">
           
-          {/* PASO 1: DATOS DEL TUTOR */}
+          {/* PASO 1: DATOS DEL TUTOR/RESPONSABLE */}
           {currentStep === 1 && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
-                Paso 1: Datos del Tutor Legal
+              <h2 className="text-xl sm:text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
+                Paso 1: Datos del {esMenorDeEdad ? 'Tutor Legal' : 'Responsable'}
               </h2>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {/* Mensaje informativo */}
+              <div className={`p-3 sm:p-4 rounded-lg border ${
+                esMenorDeEdad 
+                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
+                  : 'bg-green-50 border-green-200 text-green-700'
+              }`}>
+                <p className="text-sm font-medium">
+                  {esMenorDeEdad 
+                    ? '🔒 El aprendiz es menor de edad, se requiere información completa del tutor legal.'
+                    : '✅ El aprendiz es mayor de edad, solo se requiere información básica del responsable.'
+                  }
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                {/* Campos que SIEMPRE se muestran */}
                 <div className="col-span-2">
-                  <Tooltip text="Nombre completo del tutor o representante legal">
+                  <Tooltip text="Nombre completo del tutor o responsable">
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nombre Completo del Tutor *
+                      Nombre Completo del {esMenorDeEdad ? 'Tutor' : 'Responsable'} *
                     </label>
                   </Tooltip>
                   <input
@@ -470,8 +545,8 @@ export default function FormularioGeneradorPDF() {
                     defaultValue={formData.nombre_tutor}
                     onChange={handleInputChange}
                     required
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
-                    placeholder="Ej: María Fernanda González"
+                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                    placeholder={esMenorDeEdad ? "Ej: María Fernanda González" : "Ej: Carlos Andrés López"}
                     aria-describedby="nombre-tutor-help"
                   />
                   <p id="nombre-tutor-help" className="text-xs text-gray-500 mt-1">
@@ -481,9 +556,9 @@ export default function FormularioGeneradorPDF() {
 
                 <div className="col-span-2">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Documento de Identidad del Tutor *
+                    Documento de Identidad del {esMenorDeEdad ? 'Tutor' : 'Responsable'} *
                   </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
                     <div>
                       <Tooltip text="Seleccione el tipo de documento de identidad">
                         <label className="block text-xs text-gray-600 mb-1">
@@ -495,7 +570,7 @@ export default function FormularioGeneradorPDF() {
                         defaultValue={formData.tipo_documento_tutor}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
+                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
                       >
                         <option value="">Seleccionar tipo...</option>
                         <option value="CC">Cédula de Ciudadanía</option>
@@ -516,64 +591,72 @@ export default function FormularioGeneradorPDF() {
                         defaultValue={formData.numero_documento_tutor}
                         onChange={handleInputChange}
                         required
-                        className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
+                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
                         placeholder="Ej: 1234567890"
                       />
                     </div>
                   </div>
                 </div>
 
-                <div>
-                  <Tooltip text="Municipio donde fue expedido el documento">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Municipio de Expedición
-                    </label>
-                  </Tooltip>
-                  <input
-                    type="text"
-                    name="municipio_documento_tutor"
-                    defaultValue={formData.municipio_documento_tutor}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
-                    placeholder="Ej: Popayán"
-                  />
-                </div>
+                {/* Campos que solo se muestran si es menor de edad */}
+                {esMenorDeEdad && (
+                  <>
+                    <div>
+                      <Tooltip text="Municipio donde fue expedido el documento">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Municipio de Expedición *
+                        </label>
+                      </Tooltip>
+                      <input
+                        type="text"
+                        name="municipio_documento_tutor"
+                        defaultValue={formData.municipio_documento_tutor}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                        placeholder="Ej: Popayán"
+                      />
+                    </div>
 
-                <div>
-                  <Tooltip text="Correo electrónico para contacto y notificaciones">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Correo Electrónico
-                    </label>
-                  </Tooltip>
-                  <input
-                    type="email"
-                    name="correo_electronico_tutor"
-                    defaultValue={formData.correo_electronico_tutor}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
-                    placeholder="ejemplo@correo.com"
-                  />
-                </div>
+                    <div>
+                      <Tooltip text="Correo electrónico para contacto y notificaciones">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Correo Electrónico *
+                        </label>
+                      </Tooltip>
+                      <input
+                        type="email"
+                        name="correo_electronico_tutor"
+                        defaultValue={formData.correo_electronico_tutor}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                        placeholder="ejemplo@correo.com"
+                      />
+                    </div>
 
-                <div className="col-span-2">
-                  <Tooltip text="Dirección completa para notificaciones oficiales">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Dirección de Contacto
-                    </label>
-                  </Tooltip>
-                  <input
-                    type="text"
-                    name="direccion_contacto_tutor"
-                    defaultValue={formData.direccion_contacto_tutor}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150"
-                    placeholder="Ej: Calle 5 #12-34, Popayán"
-                  />
-                </div>
+                    <div className="col-span-2">
+                      <Tooltip text="Dirección completa para notificaciones oficiales">
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Dirección de Contacto *
+                        </label>
+                      </Tooltip>
+                      <input
+                        type="text"
+                        name="direccion_contacto_tutor"
+                        defaultValue={formData.direccion_contacto_tutor}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                        placeholder="Ej: Calle 5 #12-34, Popayán"
+                      />
+                    </div>
+                  </>
+                )}
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}
@@ -582,7 +665,7 @@ export default function FormularioGeneradorPDF() {
                 type="button"
                 onClick={() => goToStep(2)}
                 disabled={isLoadingStep}
-                className="w-full mt-6 bg-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full mt-4 sm:mt-6 bg-teal-600 text-white py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
               >
                 {isLoadingStep ? (
                   <>
@@ -599,7 +682,7 @@ export default function FormularioGeneradorPDF() {
           {/* PASO 2: FIRMA DEL APRENDIZ */}
           {currentStep === 2 && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
+              <h2 className="text-xl sm:text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
                 Paso 2: Firma del Aprendiz
               </h2>
 
@@ -609,9 +692,9 @@ export default function FormularioGeneradorPDF() {
                 </p>
                 <canvas
                   ref={canvasAprendizRef}
-                  width={700}
-                  height={200}
-                  className="border border-gray-400 rounded bg-white w-full cursor-crosshair touch-none"
+                  width={600}
+                  height={180}
+                  className="border border-gray-400 rounded bg-white w-full h-40 sm:h-48 cursor-crosshair touch-none"
                   onMouseDown={(e) => canvasAprendizRef.current && startDrawing(e, canvasAprendizRef.current, setIsDrawingAprendiz)}
                   onMouseMove={(e) => canvasAprendizRef.current && draw(e, canvasAprendizRef.current, isDrawingAprendiz)}
                   onMouseUp={() => stopDrawing(setIsDrawingAprendiz)}
@@ -621,18 +704,18 @@ export default function FormularioGeneradorPDF() {
                   onTouchEnd={() => stopDrawing(setIsDrawingAprendiz)}
                   aria-label="Área para capturar la firma del aprendiz"
                 />
-                <div className="flex gap-3 mt-4">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-4">
                   <button
                     type="button"
                     onClick={() => clearCanvas(canvasAprendizRef.current, setFirmaAprendiz)}
-                    className="flex-1 bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                    className="flex-1 bg-gray-300 text-gray-800 py-2 px-3 sm:px-4 rounded-lg hover:bg-gray-400 transition-colors font-medium text-sm sm:text-base"
                   >
                     Limpiar
                   </button>
                   <button
                     type="button"
                     onClick={() => saveSignature(canvasAprendizRef.current, setFirmaAprendiz)}
-                    className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                    className="flex-1 bg-green-600 text-white py-2 px-3 sm:px-4 rounded-lg hover:bg-green-700 transition-colors font-medium text-sm sm:text-base"
                   >
                     Guardar Firma
                   </button>
@@ -645,17 +728,17 @@ export default function FormularioGeneradorPDF() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}
 
-              <div className="flex gap-4 pt-4 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => goToStep(1)}
                   disabled={isLoadingStep}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver a Datos'}
                 </button>
@@ -663,7 +746,7 @@ export default function FormularioGeneradorPDF() {
                   type="button"
                   onClick={() => goToStep(3)}
                   disabled={isLoadingStep || !firmaAprendiz}
-                  className="flex-1 bg-teal-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 bg-teal-600 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {isLoadingStep ? (
                     <>
@@ -681,7 +764,7 @@ export default function FormularioGeneradorPDF() {
           {/* PASO 3: FIRMA DEL TUTOR */}
           {currentStep === 3 && (
             <div className="space-y-6">
-              <h2 className="text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
+              <h2 className="text-xl sm:text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
                 Paso 3: Firma del Tutor Legal
               </h2>
 
@@ -691,9 +774,9 @@ export default function FormularioGeneradorPDF() {
                 </p>
                 <canvas
                   ref={canvasTutorRef}
-                  width={700}
-                  height={200}
-                  className="border border-gray-400 rounded bg-white w-full cursor-crosshair touch-none"
+                  width={600}
+                  height={180}
+                  className="border border-gray-400 rounded bg-white w-full h-40 sm:h-48 cursor-crosshair touch-none"
                   onMouseDown={(e) => canvasTutorRef.current && startDrawing(e, canvasTutorRef.current, setIsDrawingTutor)}
                   onMouseMove={(e) => canvasTutorRef.current && draw(e, canvasTutorRef.current, isDrawingTutor)}
                   onMouseUp={() => stopDrawing(setIsDrawingTutor)}
@@ -703,18 +786,18 @@ export default function FormularioGeneradorPDF() {
                   onTouchEnd={() => stopDrawing(setIsDrawingTutor)}
                   aria-label="Área para capturar la firma del tutor legal"
                 />
-                <div className="flex gap-3 mt-4">
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 mt-4">
                   <button
                     type="button"
                     onClick={() => clearCanvas(canvasTutorRef.current, setFirmaTutor)}
-                    className="flex-1 bg-gray-300 text-gray-800 py-2 px-4 rounded-lg hover:bg-gray-400 transition-colors font-medium"
+                    className="flex-1 bg-gray-300 text-gray-800 py-2 px-3 sm:px-4 rounded-lg hover:bg-gray-400 transition-colors font-medium text-sm sm:text-base"
                   >
                     Limpiar
                   </button>
                   <button
                     type="button"
                     onClick={() => saveSignature(canvasTutorRef.current, setFirmaTutor)}
-                    className="flex-1 bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors font-medium"
+                    className="flex-1 bg-green-600 text-white py-2 px-3 sm:px-4 rounded-lg hover:bg-green-700 transition-colors font-medium text-sm sm:text-base"
                   >
                     Guardar Firma
                   </button>
@@ -727,17 +810,17 @@ export default function FormularioGeneradorPDF() {
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
                   {error}
                 </div>
               )}
 
-              <div className="flex gap-4 pt-4 border-t border-gray-200">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => goToStep(2)}
                   disabled={isLoadingStep}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 bg-gray-200 text-gray-700 py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver a Firma Aprendiz'}
                 </button>
@@ -745,7 +828,7 @@ export default function FormularioGeneradorPDF() {
                   type="button"
                   onClick={handleSubmit}
                   disabled={isLoading || !firmaTutor}
-                  className="flex-1 bg-green-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  className="flex-1 bg-green-600 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {isLoading ? (
                     <>
@@ -754,7 +837,7 @@ export default function FormularioGeneradorPDF() {
                     </>
                   ) : (
                     <>
-                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                       </svg>
                       Generar y Descargar PDF
