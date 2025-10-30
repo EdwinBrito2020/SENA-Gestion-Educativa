@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
     
     const aprendizDataSimulado: AprendizDataFromAPI = {
       nombre_aprendiz: 'Juan Felipe Pérez García',
-      tipo_documento_aprendiz: 'CC',
+      tipo_documento_aprendiz: 'TI',
       cual_tipo_id_aprendiz: '',
       numero_documento_aprendiz: '3456780',
       programa_formacion: 'Tecnología en Análisis y Desarrollo de Software',
@@ -253,7 +253,7 @@ function calculateCurrentDate(): CalculatedData {
     // Datos del aprendiz simulados (los mismos que en POST)
     const aprendizDataSimulado = {
       nombre_aprendiz: 'Juan Felipe Pérez García',
-      tipo_documento_aprendiz: 'CC', // ← CAMBIA ESTO A 'TI' para probar menor de edad
+      tipo_documento_aprendiz: 'TI', // ← CAMBIA ESTO A 'TI' para probar menor de edad
       cual_tipo_id_aprendiz: '',
       numero_documento_aprendiz: '3456780',
       programa_formacion: 'Tecnología en Análisis y Desarrollo de Software',
