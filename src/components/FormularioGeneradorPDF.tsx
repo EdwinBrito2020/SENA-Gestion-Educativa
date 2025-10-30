@@ -4,6 +4,12 @@
 
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 
+// Función auxiliar para validar email
+const isValidEmail = (email: string): boolean => {
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  return emailRegex.test(email);
+};
+
 export default function FormularioGeneradorPDF() {
   // ============================================================================
   // 1. ESTADOS DEL FORMULARIO (SIMPLIFICADOS)
@@ -79,39 +85,59 @@ export default function FormularioGeneradorPDF() {
   // 4. VALIDACIÓN DE FORMULARIO
   // ============================================================================
 
-  const validateStep1 = (): boolean => {
-    // Campos requeridos para todos
-    const camposRequeridosBase = ['nombre_tutor', 'tipo_documento_tutor', 'numero_documento_tutor'];
-    
-    // Si es menor de edad, agregar campos adicionales requeridos
-    const camposRequeridosAdicionales = esMenorDeEdad 
-      ? ['municipio_documento_tutor', 'correo_electronico_tutor', 'direccion_contacto_tutor']
-      : [];
+  // REEMPLAZAR la función validateStep1 actual con esta:
+const validateStep1 = (): boolean => {
+  console.log('[Validación Paso 1] Es menor de edad:', esMenorDeEdad);
 
-    const todosCamposRequeridos = [...camposRequeridosBase, ...camposRequeridosAdicionales];
-    
-    const isValid = todosCamposRequeridos.every(field => 
-      formData[field as keyof typeof formData]?.trim().length > 0
-    );
-
-    // Validación específica de email si está presente y es requerido
-    if (formData.correo_electronico_tutor && !isValidEmail(formData.correo_electronico_tutor)) {
-      setError('Por favor ingrese un correo electrónico válido');
-      return false;
-    }
-
-    if (!isValid) {
-      setError('Por favor complete todos los campos requeridos (*)');
-      return false;
-    }
-
+  // Si es mayor de edad, solo validar que tenga firma
+  if (!esMenorDeEdad) {
+    console.log('[Validación] Aprendiz mayor de edad - Solo validar firma');
     return true;
-  };
+  }
 
-  const isValidEmail = (email: string): boolean => {
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    return emailRegex.test(email);
-  };
+  // Si es menor de edad, en el Paso 1 solo validar que tenga firma del aprendiz
+  // NO validar campos del tutor porque el usuario aún no los ha llenado
+  if (!firmaAprendiz) {
+    setError('Por favor guarde la firma del aprendiz antes de continuar');
+    return false;
+  }
+
+  console.log('[Validación Paso 1] Firma del aprendiz OK');
+  return true;
+};
+
+// AGREGAR esta nueva función para validar el Paso 2 (datos del tutor)
+const validateStep2 = (): boolean => {
+  console.log('[Validación Paso 2] Validando datos del tutor...');
+  console.log('[Validación Paso 2] Datos del tutor:', formData);
+
+  // Validar TODOS los campos requeridos del tutor
+  const camposRequeridosBase = ['nombre_tutor', 'tipo_documento_tutor', 'numero_documento_tutor'];
+  const camposRequeridosAdicionales = ['municipio_documento_tutor', 'correo_electronico_tutor', 'direccion_contacto_tutor'];
+  const todosCamposRequeridos = [...camposRequeridosBase, ...camposRequeridosAdicionales];
+  
+  const isValid = todosCamposRequeridos.every(field => {
+    const value = formData[field as keyof typeof formData];
+    const isValidField = value && value.toString().trim().length > 0;
+    console.log(`[Validación Paso 2] Campo ${field}: "${value}" -> ${isValidField}`);
+    return isValidField;
+  });
+
+  // Validación específica de email
+  if (formData.correo_electronico_tutor && !isValidEmail(formData.correo_electronico_tutor)) {
+    setError('Por favor ingrese un correo electrónico válido');
+    return false;
+  }
+
+  console.log('[Validación Paso 2] Resultado:', isValid);
+
+  if (!isValid) {
+    setError('Por favor complete todos los campos requeridos (*)');
+    return false;
+  }
+
+  return true;
+}; 
 
   // ============================================================================
   // 5. INICIALIZACIÓN Y FUNCIONES PARA CAPTURA DE FIRMAS (MEJORADAS)
@@ -180,12 +206,13 @@ export default function FormularioGeneradorPDF() {
         const esMenor = data.aprendiz.tipo_documento_aprendiz === 'TI';
         setEsMenorDeEdad(esMenor);
         console.log('[Frontend] Tipo documento aprendiz:', data.aprendiz.tipo_documento_aprendiz, 'Es menor:', esMenor);
-      })
+      })  
       .catch((err) => {
         console.error('Error fetching data:', err);
         setEsMenorDeEdad(false); // Por defecto mayor de edad en caso de error
       });
   }, []);
+
 
   const startDrawing = useCallback((
     e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>,
@@ -267,46 +294,72 @@ export default function FormularioGeneradorPDF() {
   // ============================================================================
 
   const goToStep = useCallback(async (step: number) => {
-    setIsLoadingStep(true);
-    setError('');
+  setIsLoadingStep(true);
+  setError('');
 
-    // Simular un pequeño delay para mejor UX
-    await new Promise(resolve => setTimeout(resolve, 300));
+  await new Promise(resolve => setTimeout(resolve, 300));
 
-    try {
-      if (step === 2 && !validateStep1()) {
-        setError('Por favor complete todos los campos requeridos (*)');
-        return;
+  try {
+    // Validación para ir al Paso 2 (solo firma del aprendiz)
+    if (step === 2 && !validateStep1()) {
+      return; // El error ya se setea en validateStep1
+    }
+    
+    // Validación para ir al Paso 3 (todos los campos del tutor + firma aprendiz)
+    if (step === 3 && esMenorDeEdad) {
+      if (!validateStep2()) {
+        return; // Error en campos del tutor
       }
-      
-      if (step === 3 && !firmaAprendiz) {
+      if (!firmaAprendiz) {
         setError('Por favor guarde la firma del aprendiz antes de continuar');
         return;
       }
-      
-      setCurrentStep(step);
-    } finally {
-      setIsLoadingStep(false);
     }
-  }, [formData, firmaAprendiz]);
+
+    // Navegación normal
+    setCurrentStep(step);
+  } finally {
+    setIsLoadingStep(false);
+  }
+}, [formData, firmaAprendiz, esMenorDeEdad]);
 
   // ============================================================================
   // 7. ENVÍO DEL FORMULARIO Y GENERACIÓN DEL PDF (OPTIMIZADO)
   // ============================================================================
 
+  // Función para cuando se llama desde form
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    await submitForm();
+  };
+
+  // Función para cuando se llama desde botón
+  const handleSubmitButton = async () => {
+    await submitForm();
+  };
+
+  // Función común que contiene la lógica
+  const submitForm = async () => {
     setError('');
     setIsLoading(true);
 
-    if (!firmaAprendiz || !firmaTutor) {
+    // Validación de firmas según si es menor de edad
+    if (esMenorDeEdad && (!firmaAprendiz || !firmaTutor)) {
       setError('Por favor, capture ambas firmas antes de continuar');
       setIsLoading(false);
       return;
     }
 
+    if (!esMenorDeEdad && !firmaAprendiz) {
+      setError('Por favor, capture la firma del aprendiz antes de continuar');
+      setIsLoading(false);
+      return;
+    }
+
     try {
-      const payload = {
+      // Preparar payload según si es menor de edad
+      const payload = esMenorDeEdad ? {
+        // Para menores de edad: enviar todos los datos del tutor
         nombre_tutor: formData.nombre_tutor.trim(),
         tipo_documento_tutor: formData.tipo_documento_tutor,
         numero_documento_tutor: formData.numero_documento_tutor.trim(),
@@ -315,7 +368,19 @@ export default function FormularioGeneradorPDF() {
         direccion_contacto_tutor: formData.direccion_contacto_tutor.trim(),
         firma_aprendiz: firmaAprendiz,
         firma_tutor: firmaTutor,
+      } : {
+        // Para mayores de edad: enviar datos básicos con firma_tutor vacío 
+        nombre_tutor: '',
+        tipo_documento_tutor: '',
+        numero_documento_tutor: '',
+        municipio_documento_tutor: '',
+        correo_electronico_tutor: '',
+        direccion_contacto_tutor: '',
+        firma_aprendiz: firmaAprendiz,
+        firma_tutor: '', // valor vacío para mayores de edad
       };
+
+      console.log('Enviando payload:', payload);
 
       const response = await fetch('/api/generar-formatos', {
         method: 'POST',
@@ -371,7 +436,6 @@ export default function FormularioGeneradorPDF() {
         }
 
         alert('✅ Documentos generados exitosamente. Se descargarán automáticamente.');
-        
         resetForm();
       } else {
         throw new Error(result.message || 'Error al generar documentos');
@@ -484,211 +548,93 @@ export default function FormularioGeneradorPDF() {
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 mb-6 sm:mb-8">
           <h3 className="text-lg font-semibold text-gray-700 mb-3 border-b pb-2">Progreso</h3>
           <ol className="flex flex-col sm:flex-row justify-between gap-2 sm:gap-0">
-            {[
-              { id: 1, label: esMenorDeEdad ? 'Tutor Legal' : 'Responsable' },
-              { id: 2, label: 'Firma Aprendiz' },
-              { id: 3, label: 'Firma Tutor' },
-            ].map((step) => (
-              <li key={step.id} className="flex-1 text-center">
-                <div className={`
-                  p-2 sm:p-3 rounded-lg border-2 transition-colors duration-300 text-sm sm:text-base
-                  ${currentStep === step.id 
-                    ? 'bg-teal-600 border-teal-600 text-white shadow-md' 
-                    : currentStep > step.id
-                      ? 'bg-teal-50 border-teal-200 text-teal-800'
-                      : 'bg-white border-gray-200 text-gray-500'
-                  }
-                `}>
-                  <span className="font-bold block">Paso {step.id}</span>
-                  <span className="text-xs sm:text-sm">{step.label}</span>
-                </div>
-              </li>
-            ))}
+            {esMenorDeEdad ? (
+              // FLUJO PARA MENORES DE EDAD (3 pasos)
+              [
+                { id: 1, label: 'Acta Compromiso' },
+                { id: 2, label: 'Datos Tutor' },
+                { id: 3, label: 'Formato Datos' },
+              ].map((step) => (
+                <li key={step.id} className="flex-1 text-center">
+                  <div className={`
+                    p-2 sm:p-3 rounded-lg border-2 transition-colors duration-300 text-sm sm:text-base
+                    ${currentStep === step.id 
+                      ? 'bg-teal-600 border-teal-600 text-white shadow-md' 
+                      : currentStep > step.id
+                        ? 'bg-teal-50 border-teal-200 text-teal-800'
+                        : 'bg-white border-gray-200 text-gray-500'
+                    }
+                  `}>
+                    <span className="font-bold block">Paso {step.id}</span>
+                    <span className="text-xs sm:text-sm">{step.label}</span>
+                  </div>
+                </li>
+              ))
+            ) : (
+              // FLUJO PARA MAYORES DE EDAD (solo 2 pasos)
+              [
+                { id: 2, label: 'Firma Aprendiz' },
+                { id: 4, label: 'Descargar PDF' },
+              ].map((step) => (
+                <li key={step.id} className="flex-1 text-center">
+                  <div className={`
+                    p-2 sm:p-3 rounded-lg border-2 transition-colors duration-300 text-sm sm:text-base
+                    ${currentStep === step.id 
+                      ? 'bg-teal-600 border-teal-600 text-white shadow-md' 
+                      : currentStep > step.id
+                        ? 'bg-teal-50 border-teal-200 text-teal-800'
+                        : 'bg-white border-gray-200 text-gray-500'
+                    }
+                  `}>
+                    <span className="font-bold block">
+                      {step.id === 2 ? 'Paso 1' : 'Paso 2'}
+                    </span>
+                    <span className="text-xs sm:text-sm">{step.label}</span>
+                  </div>
+                </li>
+              ))
+            )}
           </ol>
         </div>
 
         {/* Formulario Principal */}
         <div className="bg-white rounded-xl shadow-lg p-4 sm:p-6 md:p-8">
           
-          {/* PASO 1: DATOS DEL TUTOR/RESPONSABLE */}
+          {/* PASO 1: ACTA DE COMPROMISO - PARA TODOS */}
           {currentStep === 1 && (
             <div className="space-y-6">
               <h2 className="text-xl sm:text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
-                Paso 1: Datos del {esMenorDeEdad ? 'Tutor Legal' : 'Responsable'}
+                Acta de Compromiso
               </h2>
 
-              {/* Mensaje informativo */}
-              <div className={`p-3 sm:p-4 rounded-lg border ${
-                esMenorDeEdad 
-                  ? 'bg-blue-50 border-blue-200 text-blue-700' 
-                  : 'bg-green-50 border-green-200 text-green-700'
-              }`}>
-                <p className="text-sm font-medium">
-                  {esMenorDeEdad 
-                    ? '🔒 El aprendiz es menor de edad, se requiere información completa del tutor legal.'
-                    : '✅ El aprendiz es mayor de edad, solo se requiere información básica del responsable.'
-                  }
-                </p>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
-                {/* Campos que SIEMPRE se muestran */}
-                <div className="col-span-2">
-                  <Tooltip text="Nombre completo del tutor o responsable">
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Nombre Completo del {esMenorDeEdad ? 'Tutor' : 'Responsable'} *
-                    </label>
-                  </Tooltip>
-                  <input
-                    type="text"
-                    name="nombre_tutor"
-                    defaultValue={formData.nombre_tutor}
-                    onChange={handleInputChange}
-                    required
-                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
-                    placeholder={esMenorDeEdad ? "Ej: María Fernanda González" : "Ej: Carlos Andrés López"}
-                    aria-describedby="nombre-tutor-help"
-                  />
-                  <p id="nombre-tutor-help" className="text-xs text-gray-500 mt-1">
-                    Nombre completo según documento de identidad
+              {/* TEXTO DEL ACTA DE COMPROMISO */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 sm:p-6 max-h-96 overflow-y-auto">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">Acta de Compromiso</h3>
+                <div className="text-sm text-gray-700 space-y-3">
+                  <p>
+                    Me comprometo con el Servicio Nacional de Aprendizaje - SENA, en mi calidad de Aprendiz, y como persona responsable de mis actos, a:
+                  </p>
+                  <ol className="list-decimal list-inside space-y-2 ml-4">
+                    <li>Cumplir y promover las disposiciones contempladas en el Reglamento del Aprendiz SENA, publicado en la página web del SENA y en el blog de cada centro de formación, del cual hago constar que he leído y entendido, por lo que acepto las responsabilidades, derechos y obligaciones establecidas; así como acatar las Normas y los Acuerdos de Convivencia Institucional de conformidad con el contexto geográfico y social del Centro de Formación.</li>
+                    <li>Participar en todo el proceso de inducción para iniciar el programa de formación, de acuerdo con la programación del Centro de Formación.</li>
+                    <li>Portar en todo momento el carné de identificación institucional en sitio visible.</li>
+                    <li>Proyectar la imagen corporativa del SENA dentro y fuera de la Entidad asumiendo una actitud ética, con principios y valores sociales en cada una de mis actuaciones.</li>
+                    <li>Respetar la orientación sexual, identidad de género, edad, etnia, culto, religión, ideología, procedencia y ocupación, de todos los integrantes de la comunidad educativa.</li>
+                    <li>Al finalizar la formación dar cumplimiento oportuno a todos los trámites académicos y administrativos para lograr la certificación dentro del término que establece el reglamento.</li>
+                    <li>Si soy seleccionado como beneficiario para recibir apoyo de sostenimiento, alimentación, transporte u otro, por parte de la entidad, me comprometo a realizar de forma adecuada todo los trámites administrativos y académicos correspondientes reglamentados por el SENA.</li>
+                    <li>Registrar y mantener actualizados mis datos personales y de contacto en los aplicativos informáticos que el SENA determine y actuar como veedor del registro oportuno de las situaciones académicas y administrativas que se presenten. Cualquier dato registrado por el aprendiz que no corresponda con la información real, será sujeto a lo establecido en la ley de delitos informáticos y demás normatividad vigente sobre uso de plataformas públicas.</li>
+                    <li>Con la firma del presente compromiso autorizo al SENA para que me notifique a través de mi correo electrónico registrado en el aplicativo Sofia plus, todos los actos académicos y administrativos, así como también los procedimientos y trámites en general que profiera, de acuerdo con las políticas de uso y confidencialidad.</li>
+                  </ol>
+                  <p className="font-medium mt-4">
+                    Si está de acuerdo, proceda con su firma para generar el formato de acta de compromiso.
                   </p>
                 </div>
-
-                <div className="col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Documento de Identidad del {esMenorDeEdad ? 'Tutor' : 'Responsable'} *
-                  </label>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
-                    <div>
-                      <Tooltip text="Seleccione el tipo de documento de identidad">
-                        <label className="block text-xs text-gray-600 mb-1">
-                          Tipo de Documento *
-                        </label>
-                      </Tooltip>
-                      <select
-                        name="tipo_documento_tutor"
-                        defaultValue={formData.tipo_documento_tutor}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
-                      >
-                        <option value="">Seleccionar tipo...</option>
-                        <option value="CC">Cédula de Ciudadanía</option>
-                        <option value="CE">Cédula de Extranjería</option>
-                        <option value="Pasaporte">Pasaporte</option>
-                      </select>
-                    </div>
-                    
-                    <div>
-                      <Tooltip text="Número completo del documento sin puntos ni espacios">
-                        <label className="block text-xs text-gray-600 mb-1">
-                          Número de Documento *
-                        </label>
-                      </Tooltip>
-                      <input
-                        type="text"
-                        name="numero_documento_tutor"
-                        defaultValue={formData.numero_documento_tutor}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
-                        placeholder="Ej: 1234567890"
-                      />
-                    </div>
-                  </div>
-                </div>
-
-                {/* Campos que solo se muestran si es menor de edad */}
-                {esMenorDeEdad && (
-                  <>
-                    <div>
-                      <Tooltip text="Municipio donde fue expedido el documento">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Municipio de Expedición *
-                        </label>
-                      </Tooltip>
-                      <input
-                        type="text"
-                        name="municipio_documento_tutor"
-                        defaultValue={formData.municipio_documento_tutor}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
-                        placeholder="Ej: Popayán"
-                      />
-                    </div>
-
-                    <div>
-                      <Tooltip text="Correo electrónico para contacto y notificaciones">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Correo Electrónico *
-                        </label>
-                      </Tooltip>
-                      <input
-                        type="email"
-                        name="correo_electronico_tutor"
-                        defaultValue={formData.correo_electronico_tutor}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
-                        placeholder="ejemplo@correo.com"
-                      />
-                    </div>
-
-                    <div className="col-span-2">
-                      <Tooltip text="Dirección completa para notificaciones oficiales">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          Dirección de Contacto *
-                        </label>
-                      </Tooltip>
-                      <input
-                        type="text"
-                        name="direccion_contacto_tutor"
-                        defaultValue={formData.direccion_contacto_tutor}
-                        onChange={handleInputChange}
-                        required
-                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
-                        placeholder="Ej: Calle 5 #12-34, Popayán"
-                      />
-                    </div>
-                  </>
-                )}
               </div>
 
-              {error && (
-                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={() => goToStep(2)}
-                disabled={isLoadingStep}
-                className="w-full mt-4 sm:mt-6 bg-teal-600 text-white py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
-              >
-                {isLoadingStep ? (
-                  <>
-                    <LoadingSpinner size="sm" />
-                    Validando...
-                  </>
-                ) : (
-                  'Continuar a Firma del Aprendiz →'
-                )}
-              </button>
-            </div>
-          )}
-
-          {/* PASO 2: FIRMA DEL APRENDIZ */}
-          {currentStep === 2 && (
-            <div className="space-y-6">
-              <h2 className="text-xl sm:text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
-                Paso 2: Firma del Aprendiz
-              </h2>
-
+              {/* FORMULARIO DE FIRMA DEL APRENDIZ */}
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <p className="text-sm text-gray-600 mb-3">
-                  Firme en el recuadro y presione "Guardar Firma" antes de avanzar.
+                  Firme en el recuadro a continuación para aceptar el acta de compromiso:
                 </p>
                 <canvas
                   ref={canvasAprendizRef}
@@ -734,18 +680,139 @@ export default function FormularioGeneradorPDF() {
               )}
 
               <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => esMenorDeEdad ? goToStep(2) : goToStep(4)}
+                disabled={isLoadingStep || !firmaAprendiz}
+                className="w-full bg-teal-600 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              >
+                {isLoadingStep ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    Validando...
+                  </>
+                ) : (
+                  esMenorDeEdad ? 'Continuar a Datos del Tutor →' : 'Continuar a Confirmación →'
+                )}
+              </button>
+              </div>
+            </div>
+          )}
+
+          {/* PASO 2: DATOS DEL TUTOR LEGAL - SOLO PARA MENORES DE EDAD */}
+          {currentStep === 2 && esMenorDeEdad && (
+            <div className="space-y-6">
+              <h2 className="text-xl sm:text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
+                Paso 2: Datos del Tutor Legal
+              </h2>
+
+              {/* FORMULARIO DE DATOS DEL TUTOR */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
+                <div className="col-span-2">
+                  <Tooltip text="Nombre completo del tutor legal">
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Nombre Completo del Tutor *
+                    </label>
+                  </Tooltip>
+                  <input
+                    type="text"
+                    name="nombre_tutor"
+                    defaultValue={formData.nombre_tutor}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                    placeholder="Ej: María Fernanda González"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Documento de Identidad del Tutor *
+                  </label>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                    <div>
+                      <select
+                        name="tipo_documento_tutor"
+                        defaultValue={formData.tipo_documento_tutor}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                      >
+                        <option value="">Seleccionar tipo...</option>
+                        <option value="CC">Cédula de Ciudadanía</option>
+                        <option value="CE">Cédula de Extranjería</option>
+                      </select>
+                    </div>
+                    <div>
+                      <input
+                        type="text"
+                        name="numero_documento_tutor"
+                        defaultValue={formData.numero_documento_tutor}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                        placeholder="Número de Documento"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div>
+                  <input
+                    type="text"
+                    name="municipio_documento_tutor"
+                    defaultValue={formData.municipio_documento_tutor}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                    placeholder="Municipio de Expedición"
+                  />
+                </div>
+
+                <div>
+                  <input
+                    type="email"
+                    name="correo_electronico_tutor"
+                    defaultValue={formData.correo_electronico_tutor}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                    placeholder="Correo Electrónico"
+                  />
+                </div>
+
+                <div className="col-span-2">
+                  <input
+                    type="text"
+                    name="direccion_contacto_tutor"
+                    defaultValue={formData.direccion_contacto_tutor}
+                    onChange={handleInputChange}
+                    required
+                    className="w-full px-3 sm:px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-teal-500 focus:border-teal-500 transition duration-150 text-sm sm:text-base"
+                    placeholder="Dirección de Contacto"
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t border-gray-200">
                 <button
                   type="button"
                   onClick={() => goToStep(1)}
                   disabled={isLoadingStep}
                   className="flex-1 bg-gray-200 text-gray-700 py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
-                  {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver a Datos'}
+                  {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver'}
                 </button>
                 <button
                   type="button"
                   onClick={() => goToStep(3)}
-                  disabled={isLoadingStep || !firmaAprendiz}
+                  disabled={isLoadingStep}
                   className="flex-1 bg-teal-600 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
                   {isLoadingStep ? (
@@ -754,23 +821,79 @@ export default function FormularioGeneradorPDF() {
                       Validando...
                     </>
                   ) : (
-                    'Continuar a Firma del Tutor →'
+                    'Continuar a Formato de Datos →'
                   )}
                 </button>
               </div>
             </div>
           )}
 
-          {/* PASO 3: FIRMA DEL TUTOR */}
-          {currentStep === 3 && (
+          {/* PASO 3: FORMATO TRATAMIENTO DE DATOS - SOLO PARA MENORES DE EDAD */}
+          {currentStep === 3 && esMenorDeEdad && (
             <div className="space-y-6">
               <h2 className="text-xl sm:text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
-                Paso 3: Firma del Tutor Legal
+                Paso 3: Formato de Tratamiento de Datos
               </h2>
 
+              {/* TEXTO DEL FORMATO TRATAMIENTO DE DATOS */}
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4 sm:p-6 max-h-96 overflow-y-auto">
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">FORMATO "TRATAMIENTO DE DATOS MENOR DE EDAD"</h3>
+                <div className="text-sm text-gray-700 space-y-3">
+                  <p>
+                    Yo <span className="font-semibold">{formData.nombre_tutor || '[Nombre del Tutor]'}</span>, 
+                    identificado con {formData.tipo_documento_tutor === 'CC' ? 'Cédula de Ciudadanía' : 
+                    formData.tipo_documento_tutor === 'CE' ? 'Cédula de Extranjería' : 
+                    formData.tipo_documento_tutor || '[Tipo de Documento]'} 
+                    No. <span className="font-semibold">{formData.numero_documento_tutor || '[Número de Documento]'}</span> 
+                    de <span className="font-semibold">{formData.municipio_documento_tutor || '[Municipio]'}</span> 
+                    declaro bajo la gravedad de juramento que soy el representante legal o tutor del titular de los datos personales del menor de edad, 
+                    <span className="font-semibold"> [Nombre del Aprendiz]</span>, 
+                    identificado con la tarjeta de identidad número <span className="font-semibold">[Número de Documento Aprendiz]</span>, 
+                    y conforme a la ley 1581 de 2012 y demás Decretos reglamentarios:
+                  </p>
+                  
+                  <p>
+                    AUTORIZO de manera voluntaria, previa, explicita, informada e inequívoca al Servicio Nacional de Aprendizaje - SENA, 
+                    para el manejo de los datos personales del menor de edad y del tratamiento de recolectar, transferir, transmitir, 
+                    almacenar, depurar, usar, analizar, circular, actualizar, suprimir y cruzar información, directa o a través de terceros, 
+                    con la finalidad de atender adecuadamente las actividades de ingreso y selección de los aspirantes a los diversos programas 
+                    de formación que oferte el Centro de Formación, específicamente en los procesos de inscripción, selección, revisión de los 
+                    requisitos exigidos por el programa de formación, asentamiento de matrícula y demás funciones y servicios propios del Centro 
+                    de Formación que permiten el cumplimiento de las funciones misionales del Sena.
+                  </p>
+
+                  <p>
+                    De conformidad con la Ley 1581 de 2012 y sus Decretos reglamentarios, declaro que he sido informado de lo siguiente: 
+                    (i) Que el SENA, como responsable de los datos personales del menor de edad, ha publicado las políticas de tratamiento 
+                    de datos personales en la dirección electrónica www.sena.edu.co, teléfono 3430111 y 018000 910270. (ii) Que los derechos 
+                    que me asisten como representante legal o tutor del titular de los datos personales del menor de edad son los previstos 
+                    en la constitución, la ley y demás normatividad vigente sobre uso de plataformas públicas, especialmente el derecho a conocer, 
+                    actualizar, rectificar y suprimir la información personal del menor de edad; 
+                    <span className="font-semibold"> [Nombre del Aprendiz]</span> así como el derecho a revocar el consentimiento otorgado 
+                    para el tratamiento de sus datos personales. (iii) Es voluntario responder preguntas que eventualmente me sean hechas sobre 
+                    datos sensibles o datos de menores de edad, y que estos últimos serán tratados respetando sus derechos fundamentales e intereses 
+                    superiores, de acuerdo con la política de tratamiento y protección de datos personales de la entidad.
+                  </p>
+
+                  <p>
+                    Lo anterior se podrá ejercer a través de los canales dispuestos por el SENA para la atención al público 
+                    www.sena.edu.co/servicioalciudadano/PQRS.
+                  </p>
+
+                  <p className="font-medium mt-4">
+                    Atentamente,
+                  </p>
+                  
+                  <p className="font-medium">
+                    Si está de acuerdo, proceda con su firma para generar el FORMATO "TRATAMIENTO DE DATOS MENOR DE EDAD".
+                  </p>
+                </div>
+              </div>
+
+              {/* FIRMA DEL TUTOR */}
               <div className="border border-gray-200 rounded-lg p-4 bg-gray-50">
                 <p className="text-sm text-gray-600 mb-3">
-                  Firme en el recuadro y presione "Guardar Firma" antes de generar el PDF.
+                  Firme en el recuadro a continuación para aceptar el formato de tratamiento de datos:
                 </p>
                 <canvas
                   ref={canvasTutorRef}
@@ -822,32 +945,106 @@ export default function FormularioGeneradorPDF() {
                   disabled={isLoadingStep}
                   className="flex-1 bg-gray-200 text-gray-700 py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
-                  {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver a Firma Aprendiz'}
+                  {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver'}
                 </button>
                 <button
                   type="button"
-                  onClick={handleSubmit}
-                  disabled={isLoading || !firmaTutor}
-                  className="flex-1 bg-green-600 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-green-700 transition-colors shadow-md disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+                  onClick={handleSubmitButton}
+                  disabled={isLoadingStep || !firmaTutor}
+                  className="flex-1 bg-teal-600 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
                 >
-                  {isLoading ? (
+                  {isLoadingStep ? (
                     <>
-                      <LoadingSpinner />
-                      Generando PDF...
+                      <LoadingSpinner size="sm" />
+                      Generando...
                     </>
                   ) : (
-                    <>
-                      <svg className="w-4 h-4 sm:w-5 sm:h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
-                      </svg>
-                      Generar y Descargar PDF
-                    </>
+                    'Generar y Descargar PDF'
                   )}
                 </button>
               </div>
             </div>
           )}
         </div>
+
+        {/* PASO 4: CONFIRMACIÓN Y DESCARGA - PARA TODOS */}
+        {currentStep === 4 && (
+          <div className="space-y-6">
+            <h2 className="text-xl sm:text-2xl font-extrabold text-teal-700 mb-4 border-b pb-2">
+              {esMenorDeEdad ? 'Paso 4: Confirmación y Descarga' : 'Paso 2: Confirmación y Descarga'}
+            </h2>
+
+            <div className="bg-green-50 border border-green-200 rounded-lg p-6">
+              <div className="flex items-center mb-4">
+                <div className="bg-green-100 p-2 rounded-full mr-3">
+                  <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+                  </svg>
+                </div>
+                <h3 className="text-lg font-semibold text-green-800">
+                  ¡Listo para generar documentos!
+                </h3>
+              </div>
+
+              <div className="text-sm text-gray-700 space-y-3">
+                <p><strong>Resumen del proceso:</strong></p>
+                <ul className="list-disc list-inside ml-4 space-y-1">
+                  <li>Acta de Compromiso firmada correctamente</li>
+                  {esMenorDeEdad && (
+                    <>
+                      <li>Datos del tutor completados</li>
+                      <li>Formato de Tratamiento de Datos firmado</li>
+                    </>
+                  )}
+                  <li>Documentos listos para generación</li>
+                </ul>
+                
+                <p className="mt-4 text-gray-600">
+                  Al hacer clic en "Generar y Descargar PDF", se crearán {esMenorDeEdad ? 'ambos documentos' : 'el Acta de Compromiso'} 
+                  y se descargarán automáticamente.
+                </p>
+              </div>
+            </div>
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg text-sm">
+                {error}
+              </div>
+            )}
+
+            <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 pt-4 border-t border-gray-200">
+              <button
+                type="button"
+                onClick={() => goToStep(esMenorDeEdad ? 3 : 1)}
+                disabled={isLoadingStep}
+                className="flex-1 bg-gray-200 text-gray-700 py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-gray-300 transition-colors disabled:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              >
+                {isLoadingStep ? <LoadingSpinner size="sm" /> : '← Volver'}
+              </button>
+              <button
+                type="button"
+                onClick={handleSubmitButton}
+                disabled={isLoading}
+                className="flex-1 bg-teal-600 text-white py-2 sm:py-3 px-4 sm:px-6 rounded-lg font-semibold hover:bg-teal-700 transition-colors shadow-md disabled:bg-teal-400 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm sm:text-base"
+              >
+                {isLoading ? (
+                  <>
+                    <LoadingSpinner size="sm" />
+                    Generando...
+                  </>
+                ) : (
+                  'Generar y Descargar PDF'
+                )}
+              </button>
+            </div>
+          </div>
+        )}
+
+
+        {/* Footer */}
+        <footer className="mt-8 text-center text-gray-500 text-xs sm:text-sm">
+          <p>© 2024 SENA - Sistema de Generación de Formatos. Todos los derechos reservados.</p>
+        </footer>
       </div>
     </div>
   );

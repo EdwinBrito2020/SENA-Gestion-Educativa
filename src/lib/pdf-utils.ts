@@ -97,25 +97,15 @@ async function fillActaCompromiso(
 ): Promise<{ buffer: Uint8Array; filename: string }> {
   
   console.log('[Acta Compromiso] Iniciando llenado del formulario...');
+  console.log('[Acta Compromiso] Es menor de edad:', data.tipo_documento_aprendiz === 'TI');
 
   try {
-    // PASO 1: Cargar el PDF base
-    let pdfDoc;
-    try {
-      pdfDoc = await PDFDocument.load(pdfBuffer);
-      console.log('[Acta Compromiso] ✅ PDF base cargado exitosamente');
-    } catch (error) {
-      console.error('[Acta Compromiso] ❌ ERROR al cargar PDF base:', error);
-      throw new Error(`No se pudo cargar el PDF base: ${error}`);
-    }
-
+    const pdfDoc = await PDFDocument.load(pdfBuffer);
     const form = pdfDoc.getForm();
 
-    // DEBUG: Listar campos disponibles
-    const fields = form.getFields();
-    console.log('[Acta Compromiso] Campos disponibles:', fields.map(f => f.getName()));
+    const esMenorDeEdad = data.tipo_documento_aprendiz === 'TI';
 
-    // PASO 2: Llenar campos de texto básicos del aprendiz
+    // SOLO CAMPOS QUE EXISTEN EN ACTA:
     setTextField(form, 'nombre_aprendiz', data.nombre_aprendiz);
     
     // Campo unificado de tipo y documento del APRENDIZ
@@ -124,23 +114,16 @@ async function fillActaCompromiso(
       data.numero_documento_aprendiz,
       data.cual_tipo_id_aprendiz
     );
-    console.log('[Acta Compromiso] Tipo y documento aprendiz:', tipoYDocumentoAprendiz);
-    setTextField(form, 'tipo_y_documento_aprendiz', tipoYDocumentoAprendiz);
     
-    // Número de documento formateado
     const documentoAprendizFormateado = formatDocumentNumber(data.numero_documento_aprendiz);
     setTextField(form, 'numero_documento_aprendiz', documentoAprendizFormateado);
 
-    // PASO 3: MARCAR CHECKBOXES DEL TIPO DE DOCUMENTO DEL APRENDIZ - CORREGIDO
-    console.log('[Acta Compromiso] Marcando tipo de documento aprendiz:', data.tipo_documento_aprendiz);
-
-    // ✅ CORRECCIÓN: LIMPIAR TODOS LOS CAMPOS PRIMERO (PONER VACÍO)
+    // MARCAR CHECKBOXES DEL TIPO DE DOCUMENTO DEL APRENDIZ
     const tipoDocFields = ['tipo_tarjeta_aprendiz', 'tipo_cedula_aprendiz', 'tipo_CE_aprendiz', 'tipo_otro_aprendiz'];
     tipoDocFields.forEach(fieldName => {
       setTextField(form, fieldName, '');
     });
 
-    // ✅ CORRECCIÓN: MARCAR CON "X" EL CAMPO CORRESPONDIENTE USANDO setTextField
     const checkboxMap: Record<string, string> = {
       'TI': 'tipo_tarjeta_aprendiz',
       'CC': 'tipo_cedula_aprendiz', 
@@ -150,56 +133,51 @@ async function fillActaCompromiso(
 
     const fieldName = checkboxMap[data.tipo_documento_aprendiz];
     if (fieldName) {
-      setTextField(form, fieldName, 'X'); // ← ESCRIBIR "X" EN EL TEXTFIELD
-      console.log(`[Acta Compromiso] ✅ Campo marcado con X: ${fieldName}`);
+      setTextField(form, fieldName, 'X');
     }
 
-    // PASO 4: Llenar campo "Cual" si es tipo "Otro" - CORREGIDO
+    // Campo "Cual" si es tipo "Otro"
     if (data.tipo_documento_aprendiz === 'Otro' && data.cual_tipo_id_aprendiz) {
-      console.log('[Acta Compromiso] Llenando campo "cual_tipo_id_aprendiz":', data.cual_tipo_id_aprendiz);
       setTextField(form, 'cual_tipo_id_aprendiz', data.cual_tipo_id_aprendiz);
-    } else {
-      // Limpiar el campo si no es tipo "Otro"
-      setTextField(form, 'cual_tipo_id_aprendiz', '');
     }
 
-    // PASO 5: Llenar datos del programa de formación
+    // Datos del programa
     setTextField(form, 'programa_formacion', data.programa_formacion);
     setTextField(form, 'numero_ficha', data.numero_ficha);
     setTextField(form, 'centro_formacion', data.centro_formacion);
 
-    // PASO 6: Llenar datos del tutor
-    const tipoYDocumentoTutor = buildTipoYDocumentoTutor(
-      data.tipo_documento_tutor,
-      data.numero_documento_tutor
-    );
-    console.log('[Acta Compromiso] Tipo y documento tutor:', tipoYDocumentoTutor);
-    setTextField(form, 'tipo_y_documento_tutor', tipoYDocumentoTutor);
+    // ✅ CAMBIO PRINCIPAL: SOLO LLENAR CAMPOS DEL TUTOR SI ES MENOR DE EDAD
+    if (esMenorDeEdad) {
+      console.log('[Acta Compromiso] Llenando datos del tutor (menor de edad)');
+      
+      const tipoYDocumentoTutor = buildTipoYDocumentoTutor(
+        data.tipo_documento_tutor,
+        data.numero_documento_tutor
+      );
+      setTextField(form, 'tipo_y_documento_tutor', tipoYDocumentoTutor);
+    } else {
+      console.log('[Acta Compromiso] OMITIENDO datos del tutor (mayor de edad)');
+      // Dejar el campo vacío para mayores de edad
+      setTextField(form, 'tipo_y_documento_tutor', '');
+    }
 
-    // Campos individuales del tutor
-    const documentoTutorFormateado = formatDocumentNumber(data.numero_documento_tutor);
-    setTextField(form, 'documento_tutor', documentoTutorFormateado);
-    // setTextField(form, 'municipio_documento_tutor', data.municipio_documento_tutor);
-    // setTextField(form, 'correo_electronico_tutor', data.correo_electronico_tutor);
-    // setTextField(form, 'direccion_contacto_tutor', data.direccion_contacto_tutor);
-
-    // PASO 7: Llenar la fecha
+    // Fecha (siempre se llena)
     setTextField(form, 'dia', data.dia);
     setTextField(form, 'mes', data.mes);
     setTextField(form, 'año', data.año);
 
-    // PASO 8: Insertar las firmas
+    // Firmas
     if (data.firma_aprendiz) {
       await insertSignatureImage(pdfDoc, form, 'firma_aprendiz', data.firma_aprendiz);
     }
     
-    if (data.firma_tutor) {
+    // ✅ SOLO INSERTAR FIRMA DEL TUTOR SI ES MENOR DE EDAD
+    if (esMenorDeEdad && data.firma_tutor) {
       await insertSignatureImage(pdfDoc, form, 'firma_tutor', data.firma_tutor);
+    } else {
+      console.log('[Acta Compromiso] OMITIENDO firma del tutor (mayor de edad)');
     }
 
-    console.log('[Acta Compromiso] Campos llenados, guardando PDF...');
-
-    // PASO 9: Aplanar el formulario y guardar
     form.flatten();
     const pdfBytes = await pdfDoc.save();
 

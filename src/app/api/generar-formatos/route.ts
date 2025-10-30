@@ -75,10 +75,10 @@ export async function POST(request: NextRequest) {
     // Validar campos obligatorios del usuario
     const requiredUserFields: (keyof UserDataPayload)[] = [
       'firma_aprendiz',
-      'firma_tutor',
-      'tipo_documento_tutor',
-      'numero_documento_tutor',
-      'nombre_tutor',
+//      'firma_tutor',
+//      'tipo_documento_tutor',
+//      'numero_documento_tutor',
+//      'nombre_tutor',
     ];
 
     for (const field of requiredUserFields) {
@@ -97,9 +97,9 @@ export async function POST(request: NextRequest) {
     
     const aprendizDataSimulado: AprendizDataFromAPI = {
       nombre_aprendiz: 'Juan Felipe Pérez García',
-      tipo_documento_aprendiz: 'TI',
+      tipo_documento_aprendiz: 'CC',
       cual_tipo_id_aprendiz: '',
-      numero_documento_aprendiz: '3223456780',
+      numero_documento_aprendiz: '3456780',
       programa_formacion: 'Tecnología en Análisis y Desarrollo de Software',
       numero_ficha: '7725999',
       centro_formacion: 'Centro de Comercio y Servicios',
@@ -253,11 +253,11 @@ function calculateCurrentDate(): CalculatedData {
     // Datos del aprendiz simulados (los mismos que en POST)
     const aprendizDataSimulado = {
       nombre_aprendiz: 'Juan Felipe Pérez García',
-      tipo_documento_aprendiz: 'TI', // ← CAMBIA ESTO A 'TI' para probar menor de edad
+      tipo_documento_aprendiz: 'CC', // ← CAMBIA ESTO A 'TI' para probar menor de edad
       cual_tipo_id_aprendiz: '',
-      numero_documento_aprendiz: '3223456780',
+      numero_documento_aprendiz: '3456780',
       programa_formacion: 'Tecnología en Análisis y Desarrollo de Software',
-      numero_ficha: '7725999',
+      numero_ficha: '1725999',
       centro_formacion: 'Centro  de Servicios y Gestión Empresarial',
       ciudad: 'Popayán',
       regional: 'Cauca',
