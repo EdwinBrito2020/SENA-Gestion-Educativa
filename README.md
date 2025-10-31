@@ -1,11 +1,57 @@
 # SENA-Gestion-Educativa
+# Microservicio de Generación de PDFs - SENA
 
-Pequeño proyecto Next.js + TypeScript para generación de PDF con pdf-lib y Supabase (desktop).
+## 🎯 Propósito
+Microservicio especializado en la generación automatizada de documentos PDF para el proceso de matrícula de aprendices SENA.
 
-Requisitos
-- Node.js 18+ (recomendado) y npm
-- Git
-- Supabase Desktop (si usas la integración local)
+## 📋 Documentos Generados
+- **Acta de Compromiso** (para todos los aprendices)
+- **Formato de Tratamiento de Datos** (exclusivo para aprendices menores de edad)
+
+## 🚀 Características Principales
+- ✅ Generación de PDFs con campos prellenados
+- ✅ Captura de firmas digitales
+- ✅ Flujos diferenciados para mayores y menores de edad
+- ✅ Validación completa de datos
+- ✅ Interfaz responsive y amigable
+
+## 🏗️ Arquitectura Técnica
+- **Frontend**: Next.js 14 + React + TypeScript
+- **Generación PDF**: pdf-lib
+- **Estilos**: Tailwind CSS
+- **Runtime**: Node.js
+
+## 🔄 Flujos Soportados
+
+### Para Aprendices Mayores de Edad
+1. Lectura del Acta de Compromiso
+2. Captura de firma del aprendiz
+3. Descarga del PDF generado
+
+### Para Aprendices Menores de Edad  
+1. Lectura del Acta de Compromiso
+2. Captura de firma del aprendiz
+3. Registro de datos del tutor legal
+4. Lectura del Formato de Tratamiento de Datos
+5. Captura de firma del tutor
+6. Descarga de ambos PDFs
+
+🔧 Estructura de Desarrollo
+Archivos Principales
+src/components/FormularioGeneradorPDF.tsx - Componente principal del frontend
+
+src/app/api/generar-formatos/route.ts - Endpoint de la API
+
+src/lib/pdf-utils.ts - Lógica de generación de PDFs
+
+src/lib/types.ts - Definiciones de TypeScript
+
+Recursos
+public/formato_acta_compromiso.pdf - Plantilla del acta
+
+public/formato_tratamiento_datos.pdf - Plantilla de tratamiento
+
+## 📁 Estructura del Proyecto
 
 Clonar y configurar (Windows PowerShell)
 

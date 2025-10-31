@@ -8,8 +8,8 @@
  * @version 1.1.0
  */
 
-import { PDFDocument, PDFForm } from 'pdf-lib';
-import { FullDocumentData, GeneratedDocuments } from './types';
+import { PDFDocument, PDFForm } from 'pdf-lib'; // ✅ Librería para manipulación de PDFs
+import { FullDocumentData, GeneratedDocuments } from './types'; // ✅ Interfaces TypeScript
 
 /**
  * Genera los documentos PDF a partir de los datos y plantillas proporcionados
@@ -41,7 +41,7 @@ export async function generateDocuments(
     const actaResult = await fillActaCompromiso(data, actaPdfBuffer);
 
     // PASO 2: Verificar si es necesario generar el Tratamiento de Datos
-    const esMenorDeEdad = data.tipo_documento_aprendiz === 'TI';
+    const esMenorDeEdad = data.tipo_documento_aprendiz === 'TI'; // ✅ LÓGICA CLAVE: TI = Menor de edad
     console.log(`[PDF Utils] ¿Es menor de edad (TI)?: ${esMenorDeEdad}`);
 
     // PASO 3: Generar Tratamiento de Datos solo si es menor de edad
@@ -53,7 +53,7 @@ export async function generateDocuments(
     // PASO 4: Construir y retornar el resultado
     const result: GeneratedDocuments = {
       actaCompromiso: actaResult,
-      tratamientoDatos: tratamientoResult,
+      tratamientoDatos: tratamientoResult, // ✅ Opcional: solo presente para menores
     };
 
     console.log('[PDF Utils] Generación completada exitosamente');
@@ -61,7 +61,7 @@ export async function generateDocuments(
 
   } catch (error) {
     console.error('[PDF Utils] Error en generateDocuments:', error);
-    throw error;
+    throw error; // ✅ Propagar error para manejo en capa superior
   }
 }
 
@@ -71,32 +71,44 @@ export async function generateDocuments(
 
 /**
  * Formatea un número de documento con separadores de miles
+ * @param {string} documentNumber - Número de documento a formatear
+ * @returns {string} Número formateado con separadores
+ * @example "1234567" → "1.234.567"
  */
 function formatDocumentNumber(documentNumber: string): string {
-  if (!documentNumber) return '';
-  const cleanNumber = documentNumber.replace(/[\.\s]/g, '');
-  return cleanNumber.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  if (!documentNumber) return ''; // ✅ Manejar valores vacíos
+  const cleanNumber = documentNumber.replace(/[\.\s]/g, ''); // ✅ Limpiar puntos y espacios existentes
+  return cleanNumber.replace(/\B(?=(\d{3})+(?!\d))/g, '.'); // ✅ Agregar separadores cada 3 dígitos
 }
 
 /**
  * Construye el campo unificado de tipo y documento para APRENDIZ
+ * @param {string} tipoDocumento - Tipo de documento (TI, CC, CE, Otro)
+ * @param {string} numeroDocumento - Número del documento
+ * @param {string} [cualTipo] - Especificación si tipo es "Otro"
+ * @returns {string} Cadena formateada "Tipo No. número"
+ * @example buildTipoYDocumentoAprendiz("CC", "1234567") → "CC No. 1.234.567"
  */
 function buildTipoYDocumentoAprendiz(
   tipoDocumento: string, 
   numeroDocumento: string,
   cualTipo?: string
 ): string {
-  const formattedNumber = formatDocumentNumber(numeroDocumento);
+  const formattedNumber = formatDocumentNumber(numeroDocumento); // ✅ Formatear número
   
   if (tipoDocumento === 'Otro' && cualTipo) {
-    return `${cualTipo} No. ${formattedNumber}`;
+    return `${cualTipo} No. ${formattedNumber}`; // ✅ Caso especial: tipo personalizado
   }
   
-  return `${tipoDocumento} No. ${formattedNumber}`;
+  return `${tipoDocumento} No. ${formattedNumber}`; // ✅ Caso estándar
 }
 
 /**
  * Construye el campo unificado de tipo y documento para TUTOR
+ * @param {string} tipoDocumento - Tipo de documento (CC, CE)
+ * @param {string} numeroDocumento - Número del documento  
+ * @returns {string} Cadena formateada "Tipo No. número"
+ * @example buildTipoYDocumentoTutor("CC", "1234567") → "CC No. 1.234.567"
  */
 function buildTipoYDocumentoTutor(
   tipoDocumento: string, 
@@ -110,6 +122,13 @@ function buildTipoYDocumentoTutor(
 // FUNCIONES PRINCIPALES CORREGIDAS
 // ============================================================================
 
+/**
+ * Llena el formulario del Acta de Compromiso con los datos proporcionados
+ * @async
+ * @param {FullDocumentData} data - Datos completos para llenar el formulario
+ * @param {Uint8Array} pdfBuffer - Buffer de la plantilla PDF
+ * @returns {Promise<{buffer: Uint8Array, filename: string}>} PDF generado y nombre de archivo
+ */
 async function fillActaCompromiso(
   data: FullDocumentData,
   pdfBuffer: Uint8Array
@@ -119,10 +138,10 @@ async function fillActaCompromiso(
   console.log('[Acta Compromiso] Es menor de edad:', data.tipo_documento_aprendiz === 'TI');
 
   try {
-    const pdfDoc = await PDFDocument.load(pdfBuffer);
-    const form = pdfDoc.getForm();
+    const pdfDoc = await PDFDocument.load(pdfBuffer); // ✅ Cargar plantilla PDF
+    const form = pdfDoc.getForm(); // ✅ Obtener formulario editable
 
-    const esMenorDeEdad = data.tipo_documento_aprendiz === 'TI';
+    const esMenorDeEdad = data.tipo_documento_aprendiz === 'TI'; // ✅ Determinar flujo
 
     // SOLO CAMPOS QUE EXISTEN EN ACTA:
     setTextField(form, 'nombre_aprendiz', data.nombre_aprendiz);
@@ -140,10 +159,10 @@ async function fillActaCompromiso(
     // MARCAR CHECKBOXES DEL TIPO DE DOCUMENTO DEL APRENDIZ
     const tipoDocFields = ['tipo_tarjeta_aprendiz', 'tipo_cedula_aprendiz', 'tipo_CE_aprendiz', 'tipo_otro_aprendiz'];
     tipoDocFields.forEach(fieldName => {
-      setTextField(form, fieldName, '');
+      setTextField(form, fieldName, ''); // ✅ Limpiar todos los checkboxes primero
     });
 
-    const checkboxMap: Record<string, string> = {
+    const checkboxMap: Record<string, string> = { // ✅ Mapeo tipo documento → campo checkbox
       'TI': 'tipo_tarjeta_aprendiz',
       'CC': 'tipo_cedula_aprendiz', 
       'CE': 'tipo_CE_aprendiz',
@@ -152,7 +171,7 @@ async function fillActaCompromiso(
 
     const fieldName = checkboxMap[data.tipo_documento_aprendiz];
     if (fieldName) {
-      setTextField(form, fieldName, 'X');
+      setTextField(form, fieldName, 'X'); // ✅ Marcar con "X" el checkbox correspondiente
     }
 
     // Campo "Cual" si es tipo "Otro"
@@ -197,20 +216,27 @@ async function fillActaCompromiso(
       console.log('[Acta Compromiso] OMITIENDO firma del tutor (mayor de edad)');
     }
 
-    form.flatten();
-    const pdfBytes = await pdfDoc.save();
+    form.flatten(); // ✅ Hacer el PDF de solo lectura (no editable)
+    const pdfBytes = await pdfDoc.save(); // ✅ Serializar a bytes
 
-    const filename = `acta_compromiso_${data.numero_documento_aprendiz}.pdf`;
+    const filename = `acta_compromiso_${data.numero_documento_aprendiz}.pdf`; // ✅ Nombre único basado en documento
     console.log(`[Acta Compromiso] Documento generado: ${filename}`);
     
     return { buffer: pdfBytes, filename };
 
   } catch (error) {
     console.error('[Acta Compromiso] Error al generar documento:', error);
-    throw new Error(`Error al generar Acta de Compromiso: ${error}`);
+    throw new Error(`Error al generar Acta de Compromiso: ${error}`); // ✅ Error específico
   }
 }
 
+/**
+ * Llena el formulario de Tratamiento de Datos (solo para menores de edad)
+ * @async  
+ * @param {FullDocumentData} data - Datos completos para llenar el formulario
+ * @param {Uint8Array} pdfBuffer - Buffer de la plantilla PDF
+ * @returns {Promise<{buffer: Uint8Array, filename: string}>} PDF generado y nombre de archivo
+ */
 async function fillTratamientoDatos(
   data: FullDocumentData,
   pdfBuffer: Uint8Array
@@ -318,20 +344,32 @@ async function fillTratamientoDatos(
 // FUNCIONES AUXILIARES MEJORADAS
 // ============================================================================
 
+/**
+ * Establece el valor de un campo de texto en el formulario PDF
+ * @param {PDFForm} form - Formulario PDF
+ * @param {string} fieldName - Nombre del campo
+ * @param {string} value - Valor a establecer
+ */
 function setTextField(form: PDFForm, fieldName: string, value: string): void {
   try {
-    const field = form.getTextField(fieldName);
+    const field = form.getTextField(fieldName); // ✅ Obtener campo por nombre
     if (field) {
-      field.setText(value || '');
+      field.setText(value || ''); // ✅ Establecer texto (valor vacío si es null/undefined)
       console.log(`[PDF Utils] Campo llenado: ${fieldName} = "${value}"`);
     } else {
-      console.warn(`[PDF Utils] Campo no encontrado: ${fieldName}`);
+      console.warn(`[PDF Utils] Campo no encontrado: ${fieldName}`); // ✅ Warning para campos faltantes
     }
   } catch (error) {
-    console.warn(`[PDF Utils] Error con campo ${fieldName}:`, error);
+    console.warn(`[PDF Utils] Error con campo ${fieldName}:`, error); // ✅ Error no crítico
   }
 }
 
+/**
+ * Marca un checkbox en el formulario PDF
+ * @param {PDFForm} form - Formulario PDF  
+ * @param {string} fieldName - Nombre del campo checkbox
+ * @returns {boolean} True si se pudo marcar, False si no se encontró el campo
+ */
 function setCheckbox(form: PDFForm, fieldName: string): boolean {
   try {
     const checkbox = form.getCheckBox(fieldName);
@@ -349,6 +387,14 @@ function setCheckbox(form: PDFForm, fieldName: string): boolean {
   }
 }
 
+/**
+ * Inserta una imagen de firma en el campo especificado del PDF
+ * @async
+ * @param {PDFDocument} pdfDoc - Documento PDF
+ * @param {PDFForm} form - Formulario PDF
+ * @param {string} fieldName - Nombre del campo de firma
+ * @param {string} base64Image - Imagen de firma en base64
+ */
 async function insertSignatureImage(
   pdfDoc: PDFDocument,
   form: PDFForm,
@@ -358,17 +404,17 @@ async function insertSignatureImage(
   try {
     if (!base64Image) {
       console.warn(`[PDF Utils] Firma vacía para: ${fieldName}`);
-      return;
+      return; // ✅ Salir si no hay firma
     }
 
-    const cleanBase64 = base64Image.replace(/^data:image\/(png|jpg|jpeg);base64,/, '');
-    const imageBytes = Buffer.from(cleanBase64, 'base64');
+    const cleanBase64 = base64Image.replace(/^data:image\/(png|jpg|jpeg);base64,/, ''); // ✅ Limpiar prefijo data URL
+    const imageBytes = Buffer.from(cleanBase64, 'base64'); // ✅ Convertir base64 a Buffer
     
     let image;
     if (base64Image.includes('data:image/png')) {
-      image = await pdfDoc.embedPng(imageBytes);
+      image = await pdfDoc.embedPng(imageBytes); // ✅ Embebed imagen PNG
     } else {
-      image = await pdfDoc.embedJpg(imageBytes);
+      image = await pdfDoc.embedJpg(imageBytes); // ✅ Embebed imagen JPG
     }
 
     const field = form.getTextField(fieldName);
@@ -377,35 +423,35 @@ async function insertSignatureImage(
       return;
     }
 
-    const widgets = field.acroField.getWidgets();
+    const widgets = field.acroField.getWidgets(); // ✅ Obtener widgets del campo
     
     if (widgets.length === 0) {
       console.warn(`[PDF Utils] No se encontraron widgets para: ${fieldName}`);
       return;
     }
 
-    const widget = widgets[0];
-    const rect = widget.getRectangle();
+    const widget = widgets[0]; // ✅ Tomar el primer widget
+    const rect = widget.getRectangle(); // ✅ Obtener posición y tamaño del campo
     
     const fieldWidth = rect.width;
     const fieldHeight = rect.height;
-    const imageAspectRatio = image.width / image.height;
+    const imageAspectRatio = image.width / image.height; // ✅ Calcular relación de aspecto
     
     let drawWidth = fieldWidth;
     let drawHeight = fieldWidth / imageAspectRatio;
     
-    if (drawHeight > fieldHeight) {
+    if (drawHeight > fieldHeight) { // ✅ Ajustar si excede la altura
       drawHeight = fieldHeight;
       drawWidth = fieldHeight * imageAspectRatio;
     }
 
-    const pageRef = widget.P();
+    const pageRef = widget.P(); // ✅ Obtener referencia a la página
     const pages = pdfDoc.getPages();
-    const page = pages.find(p => p.ref === pageRef) || pages[0];
+    const page = pages.find(p => p.ref === pageRef) || pages[0]; // ✅ Encontrar página o usar primera
     
-    page.drawImage(image, {
-      x: rect.x + (fieldWidth - drawWidth) / 2,
-      y: rect.y + (fieldHeight - drawHeight) / 2,
+    page.drawImage(image, { // ✅ Dibujar imagen en el PDF
+      x: rect.x + (fieldWidth - drawWidth) / 2, // ✅ Centrar horizontalmente
+      y: rect.y + (fieldHeight - drawHeight) / 2, // ✅ Centrar verticalmente
       width: drawWidth,
       height: drawHeight,
     });
