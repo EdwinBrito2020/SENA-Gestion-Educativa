@@ -1,19 +1,23 @@
 // src/lib/types.ts
 
 /**
- * DEFINICIÓN DE TIPOS DE DATOS PARA EL MICROSERVICIO DE GENERACIÓN DE PDFs
- * 
- * Este archivo centraliza todas las interfaces TypeScript utilizadas en el microservicio.
+ * @fileoverview Definición de tipos de datos para el microservicio de generación de PDFs
+ * @description Este archivo centraliza todas las interfaces TypeScript utilizadas en el microservicio.
  * Asegura type-safety y sirve como documentación de la estructura de datos.
+ * @author SENA - Equipo de desarrollo
+ * @version 1.0.0
+ * @license MIT
  */
 
-// ============================================================================
-// 1. DATOS TRAÍDOS DESDE LA API/BASE DE DATOS (SIMULADOS INICIALMENTE)
-// ============================================================================
+// ! ============================================================================
+// ! 1. DATOS TRAÍDOS DESDE LA API/BASE DE DATOS (SIMULADOS INICIALMENTE)
+// ! ============================================================================
 
 /**
- * Interface para datos del aprendiz que provienen de la API/DB
- * Estos datos se simularán inicialmente hasta conectar con la base de datos real
+ * Interface para datos del aprendiz provenientes de la API/DB
+ * @interface AprendizDataFromAPI
+ * @description Estos datos se simularán inicialmente hasta conectar con la base de datos real
+ * @todo Implementar conexión real con la base de datos
  */
 export interface AprendizDataFromAPI {
   nombre_aprendiz: string;                // Nombre completo del aprendiz

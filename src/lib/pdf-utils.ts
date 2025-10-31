@@ -1,7 +1,26 @@
-// src/lib/pdf-utils.ts - VERSIÓN COMPLETA CORREGIDA
+/**
+ * @fileoverview Utilidades para la generación y manipulación de PDFs
+ * @description Funciones para generar documentos PDF a partir de plantillas y datos
+ * @module pdf-utils
+ * @requires pdf-lib
+ * @requires ./types
+ * @author SENA - Equipo de desarrollo
+ * @version 1.1.0
+ */
+
 import { PDFDocument, PDFForm } from 'pdf-lib';
 import { FullDocumentData, GeneratedDocuments } from './types';
 
+/**
+ * Genera los documentos PDF a partir de los datos y plantillas proporcionados
+ * @async
+ * @function generateDocuments
+ * @param {FullDocumentData} data - Datos completos para llenar los formularios
+ * @param {Uint8Array} actaPdfBuffer - Buffer de la plantilla del Acta de Compromiso
+ * @param {Uint8Array} tratamientoPdfBuffer - Buffer de la plantilla del Formato de Tratamiento de Datos
+ * @returns {Promise<GeneratedDocuments>} Documentos generados con sus buffers y nombres
+ * @throws {Error} Si hay problemas al generar los documentos
+ */
 export async function generateDocuments(
   data: FullDocumentData,
   actaPdfBuffer: Uint8Array,

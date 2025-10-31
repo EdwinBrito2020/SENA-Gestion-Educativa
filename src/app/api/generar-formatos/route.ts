@@ -1,12 +1,20 @@
-// src/app/api/generar-formatos/route.ts
-
 /**
- * API ROUTE PARA GENERACIÓN DE DOCUMENTOS PDF
+ * @fileoverview API Route para generación de documentos PDF
+ * @description Este microservicio genera los PDFs necesarios para la matrícula SENA
+ * @module api/generar-formatos
+ * @requires next/server
+ * @requires fs/promises
+ * @requires path
+ * @requires @/lib/types
+ * @requires @/lib/pdf-utils
+ * @version 2.0.0
  * 
- * Endpoint: POST /api/generar-formatos
+ * @endpoint POST /api/generar-formatos
+ * @returns {Promise<NextResponse>} Respuesta con los PDFs en base64
  * 
- * Este microservicio genera ambos PDFs y los retorna para descarga directa.
- * El almacenamiento en Supabase está desactivado temporalmente.
+ * ! IMPORTANTE: El almacenamiento en Supabase está desactivado temporalmente
+ * TODO: Implementar almacenamiento en Supabase
+ * * Genera: Acta de Compromiso y Formato de Tratamiento de Datos (menores)
  */
 
 import { NextRequest, NextResponse } from 'next/server';
@@ -51,6 +59,14 @@ async function diagnosticarCamposPDF(pdfBuffer: Uint8Array, nombre: string) {
 
 export const runtime = 'nodejs';
 
+/**
+ * Maneja las peticiones POST para generar documentos
+ * @async
+ * @function POST
+ * @param {NextRequest} request - Solicitud HTTP entrante
+ * @returns {Promise<NextResponse>} Respuesta con los PDFs generados en base64
+ * @throws {Error} Si hay problemas en la generación de documentos
+ */
 export async function POST(request: NextRequest) {
   try {
     console.log('[API] Solicitud recibida en /api/generar-formatos');
@@ -226,9 +242,17 @@ export async function POST(request: NextRequest) {
 }
 
 // ============================================================================
-// FUNCIONES AUXILIARES
-// ============================================================================
+// ! FUNCIONES AUXILIARES
+// ! ============================================================================
 
+/**
+ * Calcula la fecha actual en formato español
+ * @function calculateCurrentDate
+ * @returns {CalculatedData} Objeto con día, mes, año y fecha formateada
+ * @example
+ * // Retorna { dia: "26", mes: "octubre", año: "2025", fecha: "26 de octubre de 2025" }
+ * const fecha = calculateCurrentDate();
+ */
 function calculateCurrentDate(): CalculatedData {
   const ahora = new Date();
   

@@ -106,22 +106,30 @@ const validateStep1 = (): boolean => {
   return true;
 };
 
-// AGREGAR esta nueva función para validar el Paso 2 (datos del tutor)
+// Validacion del Paso 2 mejorada (datos del tutor)
 const validateStep2 = (): boolean => {
   console.log('[Validación Paso 2] Validando datos del tutor...');
   console.log('[Validación Paso 2] Datos del tutor:', formData);
 
-  // Validar TODOS los campos requeridos del tutor
-  const camposRequeridosBase = ['nombre_tutor', 'tipo_documento_tutor', 'numero_documento_tutor'];
-  const camposRequeridosAdicionales = ['municipio_documento_tutor', 'correo_electronico_tutor', 'direccion_contacto_tutor'];
-  const todosCamposRequeridos = [...camposRequeridosBase, ...camposRequeridosAdicionales];
-  
-  const isValid = todosCamposRequeridos.every(field => {
-    const value = formData[field as keyof typeof formData];
-    const isValidField = value && value.toString().trim().length > 0;
-    console.log(`[Validación Paso 2] Campo ${field}: "${value}" -> ${isValidField}`);
-    return isValidField;
-  });
+  // Mapeo de campos a nombres amigables
+  const camposConEtiquetas = {
+    nombre_tutor: 'Nombre Completo del Tutor',
+    tipo_documento_tutor: 'Tipo de Documento',
+    numero_documento_tutor: 'Número de Documento', 
+    municipio_documento_tutor: 'Municipio de Expedición',
+    correo_electronico_tutor: 'Correo Electrónico',
+    direccion_contacto_tutor: 'Dirección de Contacto'
+  };
+
+  // Encontrar campos faltantes
+  const camposFaltantes = Object.entries(camposConEtiquetas)
+    .filter(([fieldName]) => {
+      const value = formData[fieldName as keyof typeof formData];
+      return !value || value.toString().trim().length === 0;
+    })
+    .map(([_, label]) => label);
+
+  console.log('[Validación Paso 2] Campos faltantes:', camposFaltantes);
 
   // Validación específica de email
   if (formData.correo_electronico_tutor && !isValidEmail(formData.correo_electronico_tutor)) {
@@ -129,15 +137,19 @@ const validateStep2 = (): boolean => {
     return false;
   }
 
-  console.log('[Validación Paso 2] Resultado:', isValid);
-
-  if (!isValid) {
-    setError('Por favor complete todos los campos requeridos (*)');
+  // Mostrar error específico o genérico
+  if (camposFaltantes.length > 0) {
+    if (camposFaltantes.length === Object.keys(camposConEtiquetas).length) {
+      setError('Por favor complete todos los campos requeridos (*)');
+    } else {
+      setError(`Faltan los siguientes campos: ${camposFaltantes.join(', ')}`);
+    }
     return false;
   }
 
+  console.log('[Validación Paso 2] Todos los campos están completos');
   return true;
-}; 
+};
 
   // ============================================================================
   // 5. INICIALIZACIÓN Y FUNCIONES PARA CAPTURA DE FIRMAS (MEJORADAS)
@@ -154,49 +166,48 @@ const validateStep2 = (): boolean => {
   }, []);
 
   // HOOK DE EFECTO MEJORADO: Inicializa el canvas con Resize Observer
-  useEffect(() => {
-    const updateCanvasSize = (canvas: HTMLCanvasElement) => {
-      const rect = canvas.getBoundingClientRect();
-      const dpr = window.devicePixelRatio || 1;
-      canvas.width = rect.width * dpr;
-      canvas.height = 180 * dpr;
-      
-      const ctx = canvas.getContext('2d');
-      if (ctx) {
-        ctx.scale(dpr, dpr);
-        ctx.strokeStyle = '#000';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-      }
-    };
+    useEffect(() => {
+      const updateCanvasSize = (canvas: HTMLCanvasElement) => {
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = rect.width * dpr;
+        canvas.height = 180 * dpr; // Misma altura para ambos
+        
+        const ctx = canvas.getContext('2d');
+        if (ctx) {
+          ctx.scale(dpr, dpr);
+          ctx.strokeStyle = '#000';
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.lineJoin = 'round';
+          // Limpiar y poner fondo blanco
+          ctx.fillStyle = '#ffffff';
+          ctx.fillRect(0, 0, rect.width, 180);
+        }
+      };
 
-    const canvasAprendiz = canvasAprendizRef.current;
-    const canvasTutor = canvasTutorRef.current;
+      const canvasAprendiz = canvasAprendizRef.current;
+      const canvasTutor = canvasTutorRef.current;
 
-    if (currentStep === 2 && canvasAprendiz) {
-      updateCanvasSize(canvasAprendiz);
-      
-      // Agregar observer para cambios de tamaño
-      const resizeObserver = new ResizeObserver(() => {
+      // ✅ ACTUALIZAR AMBOS CANVAS según el paso actual
+      if (currentStep === 1 && canvasAprendiz) {
         updateCanvasSize(canvasAprendiz);
-      });
+        const resizeObserver = new ResizeObserver(() => {
+          updateCanvasSize(canvasAprendiz);
+        });
+        resizeObserver.observe(canvasAprendiz);
+        return () => resizeObserver.disconnect();
+      }
       
-      resizeObserver.observe(canvasAprendiz);
-      return () => resizeObserver.disconnect();
-    }
-    
-    if (currentStep === 3 && canvasTutor) {
-      updateCanvasSize(canvasTutor);
-      
-      const resizeObserver = new ResizeObserver(() => {
+      if (currentStep === 3 && canvasTutor) {
         updateCanvasSize(canvasTutor);
-      });
-      
-      resizeObserver.observe(canvasTutor);
-      return () => resizeObserver.disconnect();
-    }
-  }, [currentStep, setupCanvas]);
+        const resizeObserver = new ResizeObserver(() => {
+          updateCanvasSize(canvasTutor);
+        });
+        resizeObserver.observe(canvasTutor);
+        return () => resizeObserver.disconnect();
+      }
+    }, [currentStep]);
 
   // ✅ OBTENER DATOS DEL APRENDIZ
   useEffect(() => {
@@ -226,10 +237,15 @@ const validateStep2 = (): boolean => {
 
     ctx.beginPath();
     
+    // ✅ CORRECCIÓN: Usar clientX/clientY y restar la posición del canvas
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     
-    ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    // ✅ CORRECCIÓN: Restar el offset del canvas y tener en cuenta el scroll
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    
+    ctx.moveTo(x, y);
   }, []);
 
   const draw = useCallback((
@@ -247,11 +263,16 @@ const validateStep2 = (): boolean => {
     const clientX = 'touches' in e ? e.touches[0].clientX : e.clientX;
     const clientY = 'touches' in e ? e.touches[0].clientY : e.clientY;
     
+    // ✅ CORRECCIÓN: Misma fórmula que en startDrawing
+    const x = clientX - rect.left;
+    const y = clientY - rect.top;
+    
     // Suavizar el trazo
     ctx.lineJoin = 'round';
     ctx.lineCap = 'round';
+    ctx.lineWidth = 2;
     
-    ctx.lineTo(clientX - rect.left, clientY - rect.top);
+    ctx.lineTo(x, y);
     ctx.stroke();
   }, []);
 
@@ -524,7 +545,7 @@ const validateStep2 = (): boolean => {
             Generador de formatos para matricula del SENA
           </h1>
           <p className="text-sm sm:text-base text-gray-600">
-            Complete los pasos para generar y descargar los formatos de Acta de Compromiso.
+            Complete los pasos para generar y descargar los formatos de Acta de Compromiso y Formato de Tratamiento de Datos si es menor de edad.
           </p>
           <div className={`mt-3 rounded-lg p-3 ${
             esMenorDeEdad === null 
